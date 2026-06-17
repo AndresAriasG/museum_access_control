@@ -1,158 +1,60 @@
 const express = require("express");
+const path = require("path");
 const { Pool } = require("pg");
 
 const app = express();
+const distPath = path.join(__dirname, "dist");
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+const pool = process.env.DATABASE_URL
+  ? new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+    })
+  : null;
+
+app.get("/api/health", (_req, res) => {
+  res.json({
+    ok: true,
+    service: "museum_access_control",
+    database: pool ? "configured" : "missing DATABASE_URL"
+  });
 });
 
-app.get("/", (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Museum Access Control</title>
-      <style>
-        body {
-          margin: 0;
-          font-family: Arial, sans-serif;
-          background: linear-gradient(135deg, #0f172a, #1e293b);
-          height: 100vh;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          color: white;
-        }
-
-        .card {
-          width: 380px;
-          background: white;
-          color: #1e293b;
-          padding: 35px;
-          border-radius: 20px;
-          box-shadow: 0 20px 50px rgba(0,0,0,0.35);
-        }
-
-        .logo {
-          text-align: center;
-          font-size: 42px;
-          margin-bottom: 10px;
-        }
-
-        h1 {
-          text-align: center;
-          margin: 0;
-          font-size: 26px;
-        }
-
-        p {
-          text-align: center;
-          color: #64748b;
-          margin-bottom: 30px;
-        }
-
-        label {
-          font-weight: bold;
-          font-size: 14px;
-        }
-
-        input {
-          width: 100%;
-          padding: 13px;
-          margin-top: 8px;
-          margin-bottom: 18px;
-          border: 1px solid #cbd5e1;
-          border-radius: 10px;
-          font-size: 15px;
-          box-sizing: border-box;
-        }
-
-        button {
-          width: 100%;
-          padding: 14px;
-          border: none;
-          border-radius: 10px;
-          background: #2563eb;
-          color: white;
-          font-size: 16px;
-          font-weight: bold;
-          cursor: pointer;
-        }
-
-        button:hover {
-          background: #1d4ed8;
-        }
-
-        .footer {
-          margin-top: 25px;
-          text-align: center;
-          font-size: 12px;
-          color: #94a3b8;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="card">
-        <div class="logo">🎟️</div>
-        <h1>Museum Access Control</h1>
-        <p>Control de ingreso con QR</p>
-
-        <form method="POST" action="/login">
-          <label>Usuario</label>
-          <input name="username" placeholder="Ingrese su usuario" required />
-
-          <label>Contraseña</label>
-          <input name="password" type="password" placeholder="Ingrese su contraseña" required />
-
-          <button type="submit">Ingresar</button>
-        </form>
-
-        <div class="footer">
-          Sistema de acceso museo · MVP
-        </div>
-      </div>
-    </body>
-    </html>
-  `);
-});
-
-app.post("/login", async (req, res) => {
-  const { username, password } = req.body;
-
-  const result = await pool.query(
-    "SELECT * FROM museum_auth_users WHERE username = $1 AND password_hash = $2 AND is_active = true",
-    [username, password]
-  );
-
-  if (result.rows.length === 0) {
-    return res.send(`
-      <h2>Usuario o contraseña incorrectos</h2>
-      <a href="/">Volver</a>
-    `);
+app.post("/api/login", async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ error: "DATABASE_URL is not configured" });
   }
 
-  const user = result.rows[0];
+  const { username, password } = req.body;
 
-  res.send(`
-    <h1>Dashboard</h1>
-    <p>Bienvenido, ${user.first_name}</p>
-    <p>Rol: ${user.role}</p>
-    <hr>
-    <button>Registrar entrada</button>
-    <button>Validar QR</button>
-    <button>Ver reportes</button>
-  `);
+  try {
+    const result = await pool.query(
+      "SELECT id, username, first_name, role FROM museum_auth_users WHERE username = $1 AND password_hash = $2 AND is_active = true",
+      [username, password]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: "Usuario o contrasena incorrectos" });
+    }
+
+    res.json({ user: result.rows[0] });
+  } catch (error) {
+    console.error("Login query failed:", error);
+    res.status(500).json({ error: "No se pudo validar el acceso" });
+  }
+});
+
+app.use(express.static(distPath));
+
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(distPath, "index.html"));
 });
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("Servidor iniciado en puerto " + PORT);
+  console.log(`Servidor iniciado en puerto ${PORT}`);
 });
