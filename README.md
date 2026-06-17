@@ -48,6 +48,8 @@ museum2026
 - `GET /api/reports`
 - `POST /api/access-users/init`
 
+Los visitantes guardan pais y ciudad en `museum_visitors.country` y `museum_visitors.city`.
+
 ## Railway
 
 El archivo `railway.json` define:

@@ -16,12 +16,12 @@ VALUES
 ON CONFLICT (name) DO NOTHING;
 
 WITH visitor_seed AS (
-  INSERT INTO museum_visitors (full_name, document_number, visitor_type, email)
+  INSERT INTO museum_visitors (full_name, document_number, visitor_type, email, country, city)
   VALUES
-    ('Camila Rojas', 'CC-1001', 'General', 'camila@example.com'),
-    ('Andres Morales', 'CC-1002', 'VIP', 'andres@example.com'),
-    ('Lucia Benitez', 'TI-1003', 'Estudiante', 'lucia@example.com'),
-    ('Mateo Vargas', 'CC-1004', 'Grupo', 'mateo@example.com')
+    ('Camila Rojas', 'CC-1001', 'General', 'camila@example.com', 'Colombia', 'Bogota'),
+    ('Andres Morales', 'CC-1002', 'VIP', 'andres@example.com', 'Colombia', 'Medellin'),
+    ('Lucia Benitez', 'TI-1003', 'Estudiante', 'lucia@example.com', 'Mexico', 'Ciudad de Mexico'),
+    ('Mateo Vargas', 'CC-1004', 'Grupo', 'mateo@example.com', 'Colombia', 'Cali')
   RETURNING id, full_name
 ),
 ticket_seed AS (

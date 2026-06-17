@@ -26,6 +26,17 @@ Para asegurar el usuario operativo que valida entradas:
 npm run db:access-user
 ```
 
+Si tu base ya existia antes de capturar pais y ciudad, ejecuta:
+
+```sql
+ALTER TABLE museum_visitors
+  ADD COLUMN IF NOT EXISTS country TEXT,
+  ADD COLUMN IF NOT EXISTS city TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_museum_visitors_country_city
+  ON museum_visitors (country, city);
+```
+
 ## Usuario inicial
 
 ```text

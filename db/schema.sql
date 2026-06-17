@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS museum_visitors (
   document_number TEXT,
   visitor_type TEXT NOT NULL DEFAULT 'General',
   email TEXT,
+  country TEXT,
+  city TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

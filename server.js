@@ -126,6 +126,8 @@ app.get("/api/dashboard", requireDb, async (_req, res) => {
         `SELECT ae.id,
                 v.full_name,
                 v.visitor_type,
+                v.country,
+                v.city,
                 COALESCE(r.name, 'Sin sala') AS room,
                 to_char(ae.entered_at, 'HH24:MI') AS time,
                 ae.status
@@ -157,6 +159,16 @@ app.get("/api/dashboard", requireDb, async (_req, res) => {
              'Sin datos'
            ) AS top_room,
            COALESCE(
+             (SELECT COALESCE(NULLIF(v.country, ''), 'Sin pais') || ' / ' || COALESCE(NULLIF(v.city, ''), 'Sin ciudad')
+              FROM museum_access_entries ae
+              JOIN museum_visitors v ON v.id = ae.visitor_id
+              WHERE ae.entered_at >= now() - interval '7 days'
+              GROUP BY v.country, v.city
+              ORDER BY COUNT(*) DESC
+              LIMIT 1),
+             'Sin datos'
+           ) AS top_origin,
+           COALESCE(
              ROUND((COUNT(*) FILTER (WHERE ticket_id IS NOT NULL)::numeric / NULLIF(COUNT(*), 0)) * 100, 1),
              0
            ) AS qr_conversion,
@@ -182,6 +194,7 @@ app.get("/api/dashboard", requireDb, async (_req, res) => {
       reports: {
         peakAccess: reportRow.peak_access || "Sin datos",
         topRoom: reportRow.top_room || "Sin datos",
+        topOrigin: reportRow.top_origin || "Sin datos",
         qrConversion: `${Number(reportRow.qr_conversion || 0)}%`,
         totalVisitors: Number(reportRow.total_visitors || 0)
       }
@@ -193,7 +206,7 @@ app.get("/api/dashboard", requireDb, async (_req, res) => {
 });
 
 app.post("/api/entries", requireDb, async (req, res) => {
-  const { fullName, documentNumber, visitorType, email, roomId, validatedBy } = req.body;
+  const { fullName, documentNumber, visitorType, email, country, city, roomId, validatedBy } = req.body;
 
   if (!fullName || !roomId) {
     return res.status(400).json({ error: "Nombre y sala son obligatorios" });
@@ -205,10 +218,17 @@ app.post("/api/entries", requireDb, async (req, res) => {
     await client.query("BEGIN");
 
     const visitor = await client.query(
-      `INSERT INTO museum_visitors (full_name, document_number, visitor_type, email)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, full_name, visitor_type`,
-      [fullName, documentNumber || null, visitorType || "General", email || null]
+      `INSERT INTO museum_visitors (full_name, document_number, visitor_type, email, country, city)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, full_name, visitor_type, country, city`,
+      [
+        fullName,
+        documentNumber || null,
+        visitorType || "General",
+        email || null,
+        country || null,
+        city || null
+      ]
     );
 
     const ticket = await client.query(
@@ -256,7 +276,9 @@ app.post("/api/qr/validate", requireDb, async (req, res) => {
               t.valid_until,
               t.signature,
               v.full_name,
-              v.visitor_type
+              v.visitor_type,
+              v.country,
+              v.city
        FROM museum_qr_tickets t
        LEFT JOIN museum_visitors v ON v.id = t.visitor_id
        WHERE t.ticket_code = $1`,
@@ -283,6 +305,8 @@ app.get("/api/history", requireDb, async (_req, res) => {
       `SELECT ae.id,
               v.full_name,
               v.visitor_type,
+              v.country,
+              v.city,
               COALESCE(r.name, 'Sin sala') AS room,
               to_char(ae.entered_at, 'YYYY-MM-DD HH24:MI') AS entered_at,
               ae.status,
@@ -311,8 +335,11 @@ app.get("/api/reports", requireDb, async (_req, res) => {
          COUNT(*)::int AS total_entries,
          COUNT(*) FILTER (WHERE entered_at::date = CURRENT_DATE)::int AS today_entries,
          COUNT(*) FILTER (WHERE ticket_id IS NOT NULL)::int AS qr_entries,
-         COUNT(DISTINCT visitor_id)::int AS unique_visitors
-       FROM museum_access_entries`
+         COUNT(DISTINCT ae.visitor_id)::int AS unique_visitors,
+         COUNT(DISTINCT NULLIF(v.country, ''))::int AS countries_count,
+         COUNT(DISTINCT NULLIF(v.city, ''))::int AS cities_count
+       FROM museum_access_entries ae
+       JOIN museum_visitors v ON v.id = ae.visitor_id`
     );
 
     res.json({ reports: result.rows[0] });

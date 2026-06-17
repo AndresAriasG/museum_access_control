@@ -201,7 +201,7 @@ function VisitorTable({ visitors = [], wide = true }) {
           <div className="table-row" key={visitor.id}>
             <div>
               <strong>{visitor.full_name}</strong>
-              <span>{visitor.visitor_type}</span>
+              <span>{visitor.visitor_type} · {[visitor.city, visitor.country].filter(Boolean).join(', ') || 'Sin origen'}</span>
             </div>
             <span>{visitor.room}</span>
             <span>{visitor.time || visitor.entered_at}</span>
@@ -275,7 +275,15 @@ function Dashboard({ data }) {
 }
 
 function EntryModule({ rooms, user, onSaved }) {
-  const [form, setForm] = useState({ fullName: '', documentNumber: '', visitorType: 'General', email: '', roomId: rooms[0]?.id || '' });
+  const [form, setForm] = useState({
+    fullName: '',
+    documentNumber: '',
+    visitorType: 'General',
+    email: '',
+    country: 'Colombia',
+    city: '',
+    roomId: rooms[0]?.id || ''
+  });
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -293,7 +301,15 @@ function EntryModule({ rooms, user, onSaved }) {
         body: JSON.stringify({ ...form, validatedBy: user?.id })
       });
       setMessage(`Entrada registrada. QR: ${data.ticket.ticket_code}`);
-      setForm({ fullName: '', documentNumber: '', visitorType: 'General', email: '', roomId: rooms[0]?.id || '' });
+      setForm({
+        fullName: '',
+        documentNumber: '',
+        visitorType: 'General',
+        email: '',
+        country: 'Colombia',
+        city: '',
+        roomId: rooms[0]?.id || ''
+      });
       onSaved();
     } catch (err) {
       setMessage(err.message);
@@ -321,6 +337,10 @@ function EntryModule({ rooms, user, onSaved }) {
           </select>
           <input placeholder="Documento / ID" value={form.documentNumber} onChange={(event) => setForm({ ...form, documentNumber: event.target.value })} />
           <input placeholder="Email opcional" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+          <div className="form-grid">
+            <input placeholder="Pais" value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value })} />
+            <input placeholder="Ciudad" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
+          </div>
           <select value={form.roomId} onChange={(event) => setForm({ ...form, roomId: event.target.value })}>
             {rooms.map((room) => <option value={room.id} key={room.id}>{room.name}</option>)}
           </select>
@@ -389,6 +409,7 @@ function QrModule() {
           <div className="detail-list">
             <div><span>Visitante</span><strong>{result.ticket.full_name || 'Sin visitante'}</strong></div>
             <div><span>Tipo</span><strong>{result.ticket.visitor_type || 'N/A'}</strong></div>
+            <div><span>Origen</span><strong>{[result.ticket.city, result.ticket.country].filter(Boolean).join(', ') || 'N/A'}</strong></div>
             <div><span>Valido hasta</span><strong>{new Date(result.ticket.valid_until).toLocaleString()}</strong></div>
             <div><span>Firma</span><strong>{result.ticket.signature || 'N/A'}</strong></div>
           </div>
@@ -412,7 +433,7 @@ function HistoryModule({ history }) {
           <div className="table-row history-row" key={item.id}>
             <div>
               <strong>{item.full_name}</strong>
-              <span>{item.ticket_code || 'Sin QR'}</span>
+              <span>{item.ticket_code || 'Sin QR'} · {[item.city, item.country].filter(Boolean).join(', ') || 'Sin origen'}</span>
             </div>
             <span>{item.room}</span>
             <span>{item.entered_at}</span>
@@ -428,7 +449,7 @@ function ReportsModule({ data, reports }) {
   const cards = [
     { label: 'Pico de acceso', value: data.reports.peakAccess, icon: Clock3 },
     { label: 'Sala mas visitada', value: data.reports.topRoom, icon: AreaChart },
-    { label: 'Conversion QR', value: data.reports.qrConversion, icon: BadgeCheck }
+    { label: 'Origen principal', value: data.reports.topOrigin, icon: UsersRound }
   ];
 
   return (
@@ -453,8 +474,8 @@ function ReportsModule({ data, reports }) {
         </div>
         <div className="insight-grid">
           <div><strong>{reports.total_entries || 0}</strong><span>Entradas totales</span></div>
-          <div><strong>{reports.today_entries || 0}</strong><span>Entradas hoy</span></div>
-          <div><strong>{reports.unique_visitors || 0}</strong><span>Visitantes unicos</span></div>
+          <div><strong>{reports.countries_count || 0}</strong><span>Paises registrados</span></div>
+          <div><strong>{reports.cities_count || 0}</strong><span>Ciudades registradas</span></div>
         </div>
       </section>
     </section>
@@ -476,7 +497,7 @@ const emptyDashboard = {
   hourly: [],
   rooms: [],
   recent: [],
-  reports: { peakAccess: 'Sin datos', topRoom: 'Sin datos', qrConversion: '0%', totalVisitors: 0 }
+  reports: { peakAccess: 'Sin datos', topRoom: 'Sin datos', topOrigin: 'Sin datos', qrConversion: '0%', totalVisitors: 0 }
 };
 
 function App() {
