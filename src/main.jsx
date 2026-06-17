@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
@@ -43,27 +43,39 @@ const navItems = [
   { id: 'reportes', label: 'Reportes', icon: BarChart3 }
 ];
 
-const kpis = [
-  { label: 'Visitantes hoy', value: '1,284', delta: '+18.4%', icon: UsersRound, tone: 'cyan' },
-  { label: 'Entradas validadas', value: '968', delta: '+12.1%', icon: TicketCheck, tone: 'green' },
-  { label: 'Capacidad ocupada', value: '74%', delta: 'Sala Norte', icon: Gauge, tone: 'amber' },
-  { label: 'Alertas activas', value: '03', delta: '2 leves', icon: ShieldCheck, tone: 'rose' }
-];
-
-const visitors = [
-  { name: 'Camila Rojas', type: 'General', room: 'Galeria Colonial', time: '09:42', status: 'Validado' },
-  { name: 'Andres Morales', type: 'VIP', room: 'Arte Moderno', time: '10:05', status: 'Dentro' },
-  { name: 'Lucia Benitez', type: 'Estudiante', room: 'Ciencias Naturales', time: '10:18', status: 'Pendiente' },
-  { name: 'Mateo Vargas', type: 'Grupo', room: 'Auditorio', time: '10:31', status: 'Validado' }
-];
-
-const reports = [
-  { label: 'Pico de acceso', value: '10:00 - 11:00', icon: Clock3 },
-  { label: 'Sala mas visitada', value: 'Arte Moderno', icon: AreaChart },
-  { label: 'Conversion QR', value: '96.8%', icon: BadgeCheck }
-];
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    ...options
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Error de conexion');
+  return data;
+}
 
 function Login({ onLogin }) {
+  const [username, setUsername] = useState('admin@museo.gov');
+  const [password, setPassword] = useState('museum2026');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const data = await api('/api/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password })
+      });
+      onLogin(data.user);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <section className="login-shell">
       <div className="login-art" aria-hidden="true">
@@ -76,29 +88,28 @@ function Login({ onLogin }) {
       </div>
       <div className="login-panel glass">
         <div className="brand-row">
-          <div className="brand-icon">
-            <ShieldCheck size={24} />
-          </div>
+          <div className="brand-icon"><ShieldCheck size={24} /></div>
           <div>
             <p className="eyebrow">Control ejecutivo</p>
             <h1>museum_access_control</h1>
           </div>
         </div>
-        <form className="login-form" onSubmit={(event) => { event.preventDefault(); onLogin(); }}>
+        <form className="login-form" onSubmit={submit}>
           <label>
             Usuario
             <div className="input-wrap">
               <UserRound size={18} />
-              <input type="email" placeholder="admin@museo.gov" defaultValue="admin@museo.gov" />
+              <input type="email" value={username} onChange={(event) => setUsername(event.target.value)} />
             </div>
           </label>
           <label>
             Contrasena
             <div className="input-wrap">
               <LockKeyhole size={18} />
-              <input type="password" placeholder="••••••••" defaultValue="museum2026" />
+              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
             </div>
           </label>
+          {error && <p className="form-message error">{error}</p>}
           <div className="login-meta">
             <label className="checkline">
               <input type="checkbox" defaultChecked />
@@ -106,13 +117,13 @@ function Login({ onLogin }) {
             </label>
             <a href="#recuperar">Recuperar acceso</a>
           </div>
-          <button className="primary-btn" type="submit">
+          <button className="primary-btn" type="submit" disabled={loading}>
             <LogIn size={18} />
-            Entrar al sistema
+            {loading ? 'Validando...' : 'Entrar al sistema'}
           </button>
         </form>
         <div className="integration-strip">
-          <span><Database size={15} /> PostgreSQL ready</span>
+          <span><Database size={15} /> PostgreSQL conectado</span>
           <span><Railway size={15} /> Railway deploy</span>
         </div>
       </div>
@@ -125,27 +136,19 @@ function Sidebar({ active, onChange, open, onClose }) {
     <>
       <aside className={`sidebar glass ${open ? 'is-open' : ''}`}>
         <div className="sidebar-head">
-          <div className="brand-icon">
-            <Fingerprint size={24} />
-          </div>
+          <div className="brand-icon"><Fingerprint size={24} /></div>
           <div>
             <strong>Museum AC</strong>
             <span>Security Suite</span>
           </div>
-          <button className="icon-btn close-btn" onClick={onClose} aria-label="Cerrar menu">
-            <X size={18} />
-          </button>
+          <button className="icon-btn close-btn" onClick={onClose} aria-label="Cerrar menu"><X size={18} /></button>
         </div>
         <nav>
           {navItems.map((item) => {
-            const Icon = item.icon;
+            const NavIcon = item.icon;
             return (
-              <button
-                key={item.id}
-                className={active === item.id ? 'active' : ''}
-                onClick={() => { onChange(item.id); onClose(); }}
-              >
-                <Icon size={19} />
+              <button key={item.id} className={active === item.id ? 'active' : ''} onClick={() => { onChange(item.id); onClose(); }}>
+                <NavIcon size={19} />
                 {item.label}
               </button>
             );
@@ -153,8 +156,8 @@ function Sidebar({ active, onChange, open, onClose }) {
         </nav>
         <div className="sidebar-card">
           <p>Integracion</p>
-          <strong>API lista para backend</strong>
-          <span>Variables de entorno, PostgreSQL y Railway preparados.</span>
+          <strong>Datos en vivo</strong>
+          <span>Login, entradas, QR, historial y reportes usan PostgreSQL.</span>
         </div>
       </aside>
       <button className={`scrim ${open ? 'is-visible' : ''}`} onClick={onClose} aria-label="Cerrar menu" />
@@ -162,13 +165,11 @@ function Sidebar({ active, onChange, open, onClose }) {
   );
 }
 
-function Header({ active, onMenu }) {
+function Header({ active, onMenu, user }) {
   const title = navItems.find((item) => item.id === active)?.label ?? 'Dashboard';
   return (
     <header className="topbar glass">
-      <button className="icon-btn menu-btn" onClick={onMenu} aria-label="Abrir menu">
-        <Menu size={21} />
-      </button>
+      <button className="icon-btn menu-btn" onClick={onMenu} aria-label="Abrir menu"><Menu size={21} /></button>
       <div>
         <p className="eyebrow">Panel administrativo</p>
         <h2>{title}</h2>
@@ -178,23 +179,57 @@ function Header({ active, onMenu }) {
           <Search size={17} />
           <input placeholder="Buscar visitante, sala o QR" />
         </div>
-        <button className="icon-btn" aria-label="Notificaciones">
-          <Bell size={19} />
-        </button>
+        <span className="user-chip">{user?.first_name || 'Usuario'}</span>
+        <button className="icon-btn" aria-label="Notificaciones"><Bell size={19} /></button>
       </div>
     </header>
   );
 }
 
-function Dashboard() {
+function VisitorTable({ visitors = [], wide = true }) {
+  return (
+    <section className={`panel glass ${wide ? 'wide' : 'full'}`}>
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Registro vivo</p>
+          <h3>Ultimos ingresos</h3>
+        </div>
+      </div>
+      <div className="table">
+        {visitors.length === 0 && <p className="empty-state">No hay registros todavia.</p>}
+        {visitors.map((visitor) => (
+          <div className="table-row" key={visitor.id}>
+            <div>
+              <strong>{visitor.full_name}</strong>
+              <span>{visitor.visitor_type}</span>
+            </div>
+            <span>{visitor.room}</span>
+            <span>{visitor.time || visitor.entered_at}</span>
+            <mark>{visitor.status}</mark>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Dashboard({ data }) {
+  const kpis = [
+    { label: 'Visitantes hoy', value: data.kpis.visitorsToday, delta: 'Desde PostgreSQL', icon: UsersRound, tone: 'cyan' },
+    { label: 'QR validados hoy', value: data.kpis.qrValidationsToday, delta: 'Tickets usados', icon: TicketCheck, tone: 'green' },
+    { label: 'Visitantes dentro', value: data.kpis.visitorsInside, delta: `${data.kpis.totalCapacity} capacidad`, icon: Gauge, tone: 'amber' },
+    { label: 'Salas activas', value: data.rooms.length, delta: 'Operativas', icon: ShieldCheck, tone: 'rose' }
+  ];
+  const max = Math.max(...data.hourly.map((item) => Number(item.value)), 1);
+
   return (
     <div className="view-grid">
       <section className="kpi-grid">
         {kpis.map((kpi) => {
-          const Icon = kpi.icon;
+          const KpiIcon = kpi.icon;
           return (
             <article className={`kpi-card glass tone-${kpi.tone}`} key={kpi.label}>
-              <div className="kpi-icon"><Icon size={22} /></div>
+              <div className="kpi-icon"><KpiIcon size={22} /></div>
               <span>{kpi.label}</span>
               <strong>{kpi.value}</strong>
               <small>{kpi.delta}</small>
@@ -208,12 +243,11 @@ function Dashboard() {
             <p className="eyebrow">Flujo en tiempo real</p>
             <h3>Accesos por hora</h3>
           </div>
-          <button className="ghost-btn">Exportar</button>
         </div>
         <div className="chart-bars" aria-label="Grafico de accesos">
-          {[42, 58, 74, 91, 68, 84, 63, 77, 55, 69].map((height, index) => (
-            <div className="bar-wrap" key={index}>
-              <span style={{ height: `${height}%` }} />
+          {data.hourly.map((item) => (
+            <div className="bar-wrap" key={item.label} title={`${item.label}: ${item.value}`}>
+              <span style={{ height: `${Math.max(8, (Number(item.value) / max) * 100)}%` }} />
             </div>
           ))}
         </div>
@@ -226,48 +260,48 @@ function Dashboard() {
           </div>
         </div>
         <div className="room-list">
-          {['Arte Moderno', 'Galeria Colonial', 'Auditorio', 'Ciencias Naturales'].map((room, index) => (
-            <div className="room-row" key={room}>
-              <span>{room}</span>
-              <div><i style={{ width: `${[82, 63, 49, 71][index]}%` }} /></div>
-              <strong>{[82, 63, 49, 71][index]}%</strong>
+          {data.rooms.map((room) => (
+            <div className="room-row" key={room.id}>
+              <span>{room.name}</span>
+              <div><i style={{ width: `${room.occupancy || 0}%` }} /></div>
+              <strong>{room.occupancy || 0}%</strong>
             </div>
           ))}
         </div>
       </section>
-      <VisitorTable />
+      <VisitorTable visitors={data.recent} />
     </div>
   );
 }
 
-function VisitorTable() {
-  return (
-    <section className="panel glass wide">
-      <div className="panel-head">
-        <div>
-          <p className="eyebrow">Registro vivo</p>
-          <h3>Ultimos ingresos</h3>
-        </div>
-        <button className="ghost-btn">Ver todos</button>
-      </div>
-      <div className="table">
-        {visitors.map((visitor) => (
-          <div className="table-row" key={visitor.name}>
-            <div>
-              <strong>{visitor.name}</strong>
-              <span>{visitor.type}</span>
-            </div>
-            <span>{visitor.room}</span>
-            <span>{visitor.time}</span>
-            <mark>{visitor.status}</mark>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
+function EntryModule({ rooms, user, onSaved }) {
+  const [form, setForm] = useState({ fullName: '', documentNumber: '', visitorType: 'General', email: '', roomId: rooms[0]?.id || '' });
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
 
-function EntryModule() {
+  useEffect(() => {
+    if (!form.roomId && rooms[0]?.id) setForm((current) => ({ ...current, roomId: rooms[0].id }));
+  }, [rooms, form.roomId]);
+
+  async function submit(event) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage('');
+    try {
+      const data = await api('/api/entries', {
+        method: 'POST',
+        body: JSON.stringify({ ...form, validatedBy: user?.id })
+      });
+      setMessage(`Entrada registrada. QR: ${data.ticket.ticket_code}`);
+      setForm({ fullName: '', documentNumber: '', visitorType: 'General', email: '', roomId: rooms[0]?.id || '' });
+      onSaved();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <section className="module-layout">
       <div className="panel glass">
@@ -277,39 +311,56 @@ function EntryModule() {
             <h3>Registrar Entrada</h3>
           </div>
         </div>
-        <form className="stack-form">
-          <input placeholder="Nombre completo" />
-          <select defaultValue="General">
+        <form className="stack-form" onSubmit={submit}>
+          <input placeholder="Nombre completo" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} />
+          <select value={form.visitorType} onChange={(event) => setForm({ ...form, visitorType: event.target.value })}>
             <option>General</option>
             <option>VIP</option>
             <option>Estudiante</option>
             <option>Grupo</option>
           </select>
-          <input placeholder="Documento / ID" />
-          <select defaultValue="Arte Moderno">
-            <option>Arte Moderno</option>
-            <option>Galeria Colonial</option>
-            <option>Ciencias Naturales</option>
-            <option>Auditorio</option>
+          <input placeholder="Documento / ID" value={form.documentNumber} onChange={(event) => setForm({ ...form, documentNumber: event.target.value })} />
+          <input placeholder="Email opcional" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+          <select value={form.roomId} onChange={(event) => setForm({ ...form, roomId: event.target.value })}>
+            {rooms.map((room) => <option value={room.id} key={room.id}>{room.name}</option>)}
           </select>
-          <button className="primary-btn" type="button">
+          {message && <p className="form-message">{message}</p>}
+          <button className="primary-btn" type="submit" disabled={loading}>
             <CheckCircle2 size={18} />
-            Registrar acceso
+            {loading ? 'Registrando...' : 'Registrar acceso'}
           </button>
         </form>
       </div>
       <div className="panel glass accent-panel">
         <CalendarDays size={34} />
         <h3>Turno actual</h3>
-        <p>Control de capacidad, horario de visita y trazabilidad de entrada en una sola operacion.</p>
-        <div className="metric-line"><span>Capacidad disponible</span><strong>326</strong></div>
-        <div className="metric-line"><span>Tiempo promedio</span><strong>38 min</strong></div>
+        <p>Control de capacidad, horario de visita y trazabilidad de entrada conectado a PostgreSQL.</p>
+        <div className="metric-line"><span>Salas disponibles</span><strong>{rooms.length}</strong></div>
+        <div className="metric-line"><span>Operador</span><strong>{user?.first_name || 'Activo'}</strong></div>
       </div>
     </section>
   );
 }
 
 function QrModule() {
+  const [ticketCode, setTicketCode] = useState('');
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  async function validate() {
+    setError('');
+    setResult(null);
+    try {
+      const data = await api('/api/qr/validate', {
+        method: 'POST',
+        body: JSON.stringify({ ticketCode })
+      });
+      setResult(data);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   return (
     <section className="module-layout">
       <div className="scanner-card glass">
@@ -318,32 +369,36 @@ function QrModule() {
           <span />
         </div>
         <h3>Validar QR</h3>
-        <p>Escaneo preparado para conectar camara, lector externo o endpoint de validacion.</p>
-        <button className="primary-btn" type="button">
+        <p>Ingresa el codigo del ticket generado al registrar una entrada.</p>
+        <input placeholder="MAC-XXXXXXXX" value={ticketCode} onChange={(event) => setTicketCode(event.target.value.toUpperCase())} />
+        <button className="primary-btn" type="button" onClick={validate}>
           <QrCode size={18} />
-          Iniciar escaneo
+          Validar codigo
         </button>
       </div>
       <div className="panel glass">
         <div className="panel-head">
           <div>
             <p className="eyebrow">Resultado</p>
-            <h3>Ticket #MAC-92814</h3>
+            <h3>{result?.ticket?.ticket_code || 'Sin ticket seleccionado'}</h3>
           </div>
-          <mark>Aprobado</mark>
+          {result && <mark>{result.approved ? 'Aprobado' : 'Rechazado'}</mark>}
         </div>
-        <div className="detail-list">
-          <div><span>Visitante</span><strong>Sofia Herrera</strong></div>
-          <div><span>Tipo</span><strong>VIP</strong></div>
-          <div><span>Valido hasta</span><strong>17 Jun 2026, 18:00</strong></div>
-          <div><span>Firma</span><strong>QR-SHA256</strong></div>
-        </div>
+        {error && <p className="form-message error">{error}</p>}
+        {result && (
+          <div className="detail-list">
+            <div><span>Visitante</span><strong>{result.ticket.full_name || 'Sin visitante'}</strong></div>
+            <div><span>Tipo</span><strong>{result.ticket.visitor_type || 'N/A'}</strong></div>
+            <div><span>Valido hasta</span><strong>{new Date(result.ticket.valid_until).toLocaleString()}</strong></div>
+            <div><span>Firma</span><strong>{result.ticket.signature || 'N/A'}</strong></div>
+          </div>
+        )}
       </div>
     </section>
   );
 }
 
-function HistoryModule() {
+function HistoryModule({ history }) {
   return (
     <section className="panel glass full">
       <div className="panel-head">
@@ -351,21 +406,38 @@ function HistoryModule() {
           <p className="eyebrow">Auditoria</p>
           <h3>Historial de accesos</h3>
         </div>
-        <button className="ghost-btn">Filtrar</button>
       </div>
-      <VisitorTable />
+      <div className="table">
+        {history.map((item) => (
+          <div className="table-row history-row" key={item.id}>
+            <div>
+              <strong>{item.full_name}</strong>
+              <span>{item.ticket_code || 'Sin QR'}</span>
+            </div>
+            <span>{item.room}</span>
+            <span>{item.entered_at}</span>
+            <mark>{item.status}</mark>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
 
-function ReportsModule() {
+function ReportsModule({ data, reports }) {
+  const cards = [
+    { label: 'Pico de acceso', value: data.reports.peakAccess, icon: Clock3 },
+    { label: 'Sala mas visitada', value: data.reports.topRoom, icon: AreaChart },
+    { label: 'Conversion QR', value: data.reports.qrConversion, icon: BadgeCheck }
+  ];
+
   return (
     <section className="view-grid">
-      {reports.map((report) => {
-        const Icon = report.icon;
+      {cards.map((report) => {
+        const ReportIcon = report.icon;
         return (
           <article className="report-card glass" key={report.label}>
-            <Icon size={26} />
+            <ReportIcon size={26} />
             <span>{report.label}</span>
             <strong>{report.value}</strong>
             <ChevronRight size={19} />
@@ -376,14 +448,13 @@ function ReportsModule() {
         <div className="panel-head">
           <div>
             <p className="eyebrow">Reportes ejecutivos</p>
-            <h3>Resumen semanal</h3>
+            <h3>Resumen conectado a PostgreSQL</h3>
           </div>
-          <button className="ghost-btn">Descargar PDF</button>
         </div>
         <div className="insight-grid">
-          <div><strong>8,946</strong><span>Visitantes totales</span></div>
-          <div><strong>4.7/5</strong><span>Satisfaccion</span></div>
-          <div><strong>99.2%</strong><span>Disponibilidad</span></div>
+          <div><strong>{reports.total_entries || 0}</strong><span>Entradas totales</span></div>
+          <div><strong>{reports.today_entries || 0}</strong><span>Entradas hoy</span></div>
+          <div><strong>{reports.unique_visitors || 0}</strong><span>Visitantes unicos</span></div>
         </div>
       </section>
     </section>
@@ -393,33 +464,66 @@ function ReportsModule() {
 function IntegrationStatus() {
   return (
     <div className="integration-card glass">
-      <span><Database size={16} /> PostgreSQL schema ready</span>
+      <span><Database size={16} /> PostgreSQL live</span>
       <span><Railway size={16} /> Railway env vars</span>
-      <span><ShieldCheck size={16} /> JWT auth layer</span>
+      <span><ShieldCheck size={16} /> API conectada</span>
     </div>
   );
 }
 
+const emptyDashboard = {
+  kpis: { visitorsToday: 0, qrValidationsToday: 0, visitorsInside: 0, totalCapacity: 0 },
+  hourly: [],
+  rooms: [],
+  recent: [],
+  reports: { peakAccess: 'Sin datos', topRoom: 'Sin datos', qrConversion: '0%', totalVisitors: 0 }
+};
+
 function App() {
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [user, setUser] = useState(null);
   const [active, setActive] = useState('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [dashboard, setDashboard] = useState(emptyDashboard);
+  const [history, setHistory] = useState([]);
+  const [reports, setReports] = useState({});
+  const [error, setError] = useState('');
+
+  async function loadData() {
+    setError('');
+    try {
+      const [dashboardData, historyData, reportData] = await Promise.all([
+        api('/api/dashboard'),
+        api('/api/history'),
+        api('/api/reports')
+      ]);
+      setDashboard(dashboardData);
+      setHistory(historyData.history || []);
+      setReports(reportData.reports || {});
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  useEffect(() => {
+    if (user) loadData();
+  }, [user]);
 
   const content = useMemo(() => {
-    if (active === 'entrada') return <EntryModule />;
+    if (active === 'entrada') return <EntryModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
     if (active === 'qr') return <QrModule />;
-    if (active === 'historial') return <HistoryModule />;
-    if (active === 'reportes') return <ReportsModule />;
-    return <Dashboard />;
-  }, [active]);
+    if (active === 'historial') return <HistoryModule history={history} />;
+    if (active === 'reportes') return <ReportsModule data={dashboard} reports={reports} />;
+    return <Dashboard data={dashboard} />;
+  }, [active, dashboard, history, reports, user]);
 
-  if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)} />;
+  if (!user) return <Login onLogin={setUser} />;
 
   return (
     <main className="app-shell">
       <Sidebar active={active} onChange={setActive} open={menuOpen} onClose={() => setMenuOpen(false)} />
       <section className="content-shell">
-        <Header active={active} onMenu={() => setMenuOpen(true)} />
+        <Header active={active} onMenu={() => setMenuOpen(true)} user={user} />
+        {error && <p className="form-message error">{error}</p>}
         {content}
         <IntegrationStatus />
       </section>

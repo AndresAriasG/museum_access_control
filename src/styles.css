@@ -40,6 +40,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .glass {
   border: 1px solid var(--line);
   background: var(--panel);
@@ -243,6 +248,22 @@ select,
   text-decoration: none;
 }
 
+.form-message {
+  margin: 0;
+  border-radius: 12px;
+  padding: 11px 13px;
+  color: var(--green);
+  background: rgba(98, 230, 166, 0.1);
+  border: 1px solid rgba(98, 230, 166, 0.2);
+  font-size: 0.88rem;
+}
+
+.form-message.error {
+  color: var(--rose);
+  background: rgba(255, 120, 144, 0.1);
+  border-color: rgba(255, 120, 144, 0.22);
+}
+
 .checkline {
   display: flex !important;
   grid-template-columns: auto 1fr;
@@ -426,6 +447,17 @@ select,
   padding: 0 12px;
 }
 
+.user-chip {
+  min-height: 34px;
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--cyan);
+  background: rgba(69, 212, 255, 0.1);
+  border: 1px solid rgba(69, 212, 255, 0.22);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
 .view-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -577,6 +609,15 @@ select,
 .table-row span {
   color: var(--muted);
   font-size: 0.88rem;
+}
+
+.history-row {
+  grid-template-columns: minmax(160px, 1.35fr) minmax(130px, 1fr) minmax(150px, 1fr) 100px;
+}
+
+.empty-state {
+  margin: 0;
+  color: var(--muted);
 }
 
 mark {

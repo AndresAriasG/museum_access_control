@@ -30,6 +30,24 @@ npm run db:seed
 
 Ver mas detalles en `db/README.md`.
 
+Usuario operativo para validar entradas:
+
+```text
+accesos@museo.gov
+museum2026
+```
+
+## API conectada
+
+- `POST /api/login`
+- `GET /api/dashboard`
+- `GET /api/rooms`
+- `POST /api/entries`
+- `POST /api/qr/validate`
+- `GET /api/history`
+- `GET /api/reports`
+- `POST /api/access-users/init`
+
 ## Railway
 
 El archivo `railway.json` define:

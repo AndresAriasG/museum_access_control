@@ -20,10 +20,23 @@ Tambien puedes ejecutar todo junto:
 npm run db:reset
 ```
 
+Para asegurar el usuario operativo que valida entradas:
+
+```bash
+npm run db:access-user
+```
+
 ## Usuario inicial
 
 ```text
 Usuario: admin@museo.gov
+Password: museum2026
+```
+
+Usuario operativo:
+
+```text
+Usuario: accesos@museo.gov
 Password: museum2026
 ```
 
