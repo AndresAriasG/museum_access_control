@@ -6,6 +6,9 @@
     "dev": "vite --host 127.0.0.1",
     "dev:server": "node server.js",
     "build": "vite build",
+    "db:schema": "psql \"$DATABASE_URL\" -f db/schema.sql",
+    "db:seed": "psql \"$DATABASE_URL\" -f db/seed.sql",
+    "db:reset": "psql \"$DATABASE_URL\" -f db/schema.sql && psql \"$DATABASE_URL\" -f db/seed.sql",
     "preview": "vite preview --host 127.0.0.1",
     "start": "node server.js"
   },
