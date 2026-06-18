@@ -386,6 +386,7 @@ app.get("/api/history", requireDb, async (req, res) => {
               COALESCE(r.name, 'Sin sala') AS room,
               to_char(ae.entered_at, 'YYYY-MM-DD HH24:MI') AS entered_at,
               ae.status,
+              t.id AS ticket_id,
               t.ticket_code,
               u.username AS validated_by
        FROM museum_access_entries ae
@@ -466,6 +467,7 @@ app.get("/api/reports/accesses", requireDb, async (req, res) => {
                 COALESCE(r.name, 'Sin sala') AS room,
                 to_char(ae.entered_at, 'YYYY-MM-DD HH24:MI') AS entered_at,
                 ae.status,
+                t.id AS ticket_id,
                 t.ticket_code,
                 u.username AS validated_by
          FROM museum_access_entries ae

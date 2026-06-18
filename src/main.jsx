@@ -103,6 +103,55 @@ function exportCsv(rows) {
   URL.revokeObjectURL(url);
 }
 
+function qrPayload(ticket) {
+  return JSON.stringify({
+    ticketId: ticket.ticketId || ticket.ticket_id || ticket.id,
+    ticketCode: ticket.code || ticket.ticket_code,
+    entryId: ticket.entryId || ticket.entry_id,
+    visitor: ticket.visitor || ticket.full_name,
+    issuedAt: ticket.entered_at || ticket.issuedAt
+  });
+}
+
+async function printQr(ticket) {
+  const code = ticket.code || ticket.ticket_code;
+  const visitor = ticket.visitor || ticket.full_name || 'Visitante';
+  const payload = qrPayload(ticket);
+  const qrSrc = await QRCode.toDataURL(payload, {
+    width: 260,
+    margin: 2,
+    color: { dark: '#071014', light: '#ffffff' }
+  });
+  const printWindow = window.open('', '_blank', 'width=420,height=620');
+  if (!printWindow) return;
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>QR ${code}</title>
+        <style>
+          body { font-family: Arial, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; color: #071014; }
+          main { text-align: center; border: 1px solid #d8dee4; border-radius: 16px; padding: 24px; width: 320px; }
+          img { width: 260px; height: 260px; }
+          h1 { font-size: 20px; margin: 0 0 8px; }
+          p { margin: 6px 0; }
+          strong { font-size: 18px; }
+        </style>
+      </head>
+      <body>
+        <main>
+          <h1>Museo del Zocalo</h1>
+          <img src="${qrSrc}" alt="QR ${code}" />
+          <strong>${code}</strong>
+          <p>${visitor}</p>
+          <p>${ticket.room || ''}</p>
+        </main>
+        <script>window.onload = () => { window.print(); window.close(); };</script>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
 function QRCodeImage({ value, label }) {
   const [src, setSrc] = useState('');
 
@@ -437,7 +486,10 @@ function EntryModule({ rooms, user, onSaved }) {
       setMessage(`Entrada registrada. QR: ${data.ticket.ticket_code}`);
       setGeneratedTicket({
         code: data.ticket.ticket_code,
-        visitor: data.visitor.full_name
+        ticketId: data.ticket.id,
+        entryId: data.entry.id,
+        visitor: data.visitor.full_name,
+        issuedAt: data.entry.entered_at
       });
       setForm({
         fullName: '',
@@ -499,7 +551,8 @@ function EntryModule({ rooms, user, onSaved }) {
           {generatedTicket && (
             <div className="generated-qr-card">
               <p className="eyebrow">QR generado</p>
-              <QRCodeImage value={generatedTicket.code} label={`${generatedTicket.visitor} · ${generatedTicket.code}`} />
+              <QRCodeImage value={qrPayload(generatedTicket)} label={`${generatedTicket.visitor} · ${generatedTicket.code}`} />
+              <button className="ghost-btn" type="button" onClick={() => printQr(generatedTicket)}>Imprimir QR</button>
             </div>
           )}
         </form>
@@ -596,12 +649,13 @@ function QrModule({ history }) {
       <div className="qr-grid">
         {tickets.map((item) => (
           <article className="qr-card" key={item.id}>
-            <QRCodeImage value={item.ticket_code} label={item.ticket_code} />
+            <QRCodeImage value={qrPayload(item)} label={item.ticket_code} />
             <div>
               <strong>{item.full_name}</strong>
               <span>{item.room}</span>
               <small>{item.entered_at}</small>
             </div>
+            <button className="ghost-btn" type="button" onClick={() => printQr(item)}>Imprimir QR</button>
           </article>
         ))}
       </div>

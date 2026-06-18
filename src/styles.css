@@ -738,6 +738,11 @@ select,
   border: 1px solid var(--line);
 }
 
+.generated-qr-card .ghost-btn,
+.qr-card .ghost-btn {
+  justify-self: center;
+}
+
 .qr-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
