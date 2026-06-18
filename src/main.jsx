@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import QRCode from 'qrcode';
 import './styles.css';
 
 const Icon = ({ size = 20, children }) => (
@@ -27,7 +28,6 @@ const LogIn = (props) => <Icon {...props}><path d="M14 3h5v18h-5" /><path d="M10
 const Menu = (props) => <Icon {...props}><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></Icon>;
 const QrCode = (props) => <Icon {...props}><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><path d="M14 14h3v3h-3z" /><path d="M21 14v7h-4" /></Icon>;
 const Railway = (props) => <Icon {...props}><path d="M4 17 12 3l8 14" /><path d="M7 17h10" /><path d="M9 21h6" /></Icon>;
-const ScanLine = (props) => <Icon {...props}><path d="M4 7V5a2 2 0 0 1 2-2h2" /><path d="M16 3h2a2 2 0 0 1 2 2v2" /><path d="M20 17v2a2 2 0 0 1-2 2h-2" /><path d="M8 21H6a2 2 0 0 1-2-2v-2" /><path d="M7 12h10" /></Icon>;
 const Search = (props) => <Icon {...props}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Icon>;
 const ShieldCheck = (props) => <Icon {...props}><path d="M12 3 20 6v6c0 5-3.4 8.5-8 9-4.6-.5-8-4-8-9V6l8-3Z" /><path d="m8.5 12 2.2 2.2L16 9" /></Icon>;
 const TicketCheck = (props) => <Icon {...props}><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4V7Z" /><path d="m9 12 2 2 4-4" /></Icon>;
@@ -39,7 +39,7 @@ const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'entrada', label: 'Registrar Entrada', icon: DoorOpen },
   { id: 'salas', label: 'Salas', icon: Gauge },
-  { id: 'qr', label: 'Validar QR', icon: QrCode },
+  { id: 'qr', label: 'QR generados', icon: QrCode },
   { id: 'historial', label: 'Historial', icon: History },
   { id: 'reportes', label: 'Reportes', icon: BarChart3 }
 ];
@@ -101,6 +101,36 @@ function exportCsv(rows) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function QRCodeImage({ value, label }) {
+  const [src, setSrc] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    QRCode.toDataURL(value, {
+      width: 220,
+      margin: 2,
+      color: {
+        dark: '#071014',
+        light: '#f3f7f8'
+      }
+    }).then((dataUrl) => {
+      if (active) setSrc(dataUrl);
+    });
+    return () => {
+      active = false;
+    };
+  }, [value]);
+
+  if (!src) return <div className="qr-placeholder">Generando QR...</div>;
+
+  return (
+    <figure className="qr-figure">
+      <img src={src} alt={`QR ${label || value}`} />
+      <figcaption>{label || value}</figcaption>
+    </figure>
+  );
 }
 
 function Login({ onLogin }) {
@@ -388,6 +418,7 @@ function EntryModule({ rooms, user, onSaved }) {
     roomId: rooms[0]?.id || ''
   });
   const [message, setMessage] = useState('');
+  const [generatedTicket, setGeneratedTicket] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -404,6 +435,10 @@ function EntryModule({ rooms, user, onSaved }) {
         body: JSON.stringify({ ...form, validatedBy: user?.id })
       });
       setMessage(`Entrada registrada. QR: ${data.ticket.ticket_code}`);
+      setGeneratedTicket({
+        code: data.ticket.ticket_code,
+        visitor: data.visitor.full_name
+      });
       setForm({
         fullName: '',
         documentNumber: '',
@@ -461,6 +496,12 @@ function EntryModule({ rooms, user, onSaved }) {
             <CheckCircle2 size={18} />
             {loading ? 'Registrando...' : 'Registrar acceso'}
           </button>
+          {generatedTicket && (
+            <div className="generated-qr-card">
+              <p className="eyebrow">QR generado</p>
+              <QRCodeImage value={generatedTicket.code} label={`${generatedTicket.visitor} · ${generatedTicket.code}`} />
+            </div>
+          )}
         </form>
       </div>
       <div className="panel glass accent-panel">
@@ -541,58 +582,28 @@ function RoomsModule({ rooms, onSaved }) {
   );
 }
 
-function QrModule() {
-  const [ticketCode, setTicketCode] = useState('');
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState('');
-
-  async function validate() {
-    setError('');
-    setResult(null);
-    try {
-      const data = await api('/api/qr/validate', {
-        method: 'POST',
-        body: JSON.stringify({ ticketCode })
-      });
-      setResult(data);
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
+function QrModule({ history }) {
+  const tickets = history.filter((item) => item.ticket_code).slice(0, 12);
   return (
-    <section className="module-layout">
-      <div className="scanner-card glass">
-        <div className="scan-frame">
-          <ScanLine size={88} />
-          <span />
+    <section className="panel glass full">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Emision</p>
+          <h3>QR generados por ingreso</h3>
         </div>
-        <h3>Validar QR</h3>
-        <p>Ingresa el codigo del ticket generado al registrar una entrada.</p>
-        <input placeholder="MAC-XXXXXXXX" value={ticketCode} onChange={(event) => setTicketCode(event.target.value.toUpperCase())} />
-        <button className="primary-btn" type="button" onClick={validate}>
-          <QrCode size={18} />
-          Validar codigo
-        </button>
       </div>
-      <div className="panel glass">
-        <div className="panel-head">
-          <div>
-            <p className="eyebrow">Resultado</p>
-            <h3>{result?.ticket?.ticket_code || 'Sin ticket seleccionado'}</h3>
-          </div>
-          {result && <mark>{result.approved ? 'Aprobado' : 'Rechazado'}</mark>}
-        </div>
-        {error && <p className="form-message error">{error}</p>}
-        {result && (
-          <div className="detail-list">
-            <div><span>Visitante</span><strong>{result.ticket.full_name || 'Sin visitante'}</strong></div>
-            <div><span>Tipo</span><strong>{result.ticket.visitor_type || 'N/A'}</strong></div>
-            <div><span>Origen</span><strong>{[result.ticket.city, result.ticket.country].filter(Boolean).join(', ') || 'N/A'}</strong></div>
-            <div><span>Valido hasta</span><strong>{new Date(result.ticket.valid_until).toLocaleString()}</strong></div>
-            <div><span>Firma</span><strong>{result.ticket.signature || 'N/A'}</strong></div>
-          </div>
-        )}
+      {tickets.length === 0 && <p className="empty-state">Aun no hay QR generados. Registra una entrada para crear el primero.</p>}
+      <div className="qr-grid">
+        {tickets.map((item) => (
+          <article className="qr-card" key={item.id}>
+            <QRCodeImage value={item.ticket_code} label={item.ticket_code} />
+            <div>
+              <strong>{item.full_name}</strong>
+              <span>{item.room}</span>
+              <small>{item.entered_at}</small>
+            </div>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -849,7 +860,7 @@ function App() {
     const filteredDashboard = { ...dashboard, recent: filteredRecent };
     if (active === 'entrada') return <EntryModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
     if (active === 'salas') return <RoomsModule rooms={dashboard.rooms} onSaved={loadData} />;
-    if (active === 'qr') return <QrModule />;
+    if (active === 'qr') return <QrModule history={history} />;
     if (active === 'historial') {
       return (
         <HistoryModule
