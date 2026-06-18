@@ -473,17 +473,18 @@ select,
   top: calc(100% + 10px);
   right: 0;
   display: grid;
-  gap: 10px;
-  width: min(320px, 82vw);
+  gap: 8px;
+  width: min(280px, 76vw);
   border-radius: 16px;
-  padding: 15px;
+  padding: 13px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
 }
 
 .notification-item {
   display: grid;
   gap: 4px;
-  border-radius: 12px;
-  padding: 11px;
+  border-radius: 10px;
+  padding: 10px;
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -509,15 +510,11 @@ select,
   min-width: 150px;
 }
 
-.user-chip {
-  min-height: 34px;
-  border-radius: 999px;
-  padding: 8px 12px;
-  color: var(--cyan);
-  background: rgba(69, 212, 255, 0.1);
-  border: 1px solid rgba(69, 212, 255, 0.22);
+.session-label {
+  color: var(--muted);
   font-size: 0.84rem;
-  font-weight: 800;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .view-grid {

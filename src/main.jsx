@@ -245,7 +245,7 @@ function Header({
           <button className="ghost-btn search-action" type="submit">Buscar</button>
           {searchQuery && <button className="ghost-btn search-action" type="button" onClick={onClearSearch}>Limpiar</button>}
         </form>
-        <span className="user-chip">{user?.first_name || 'Usuario'}</span>
+        <span className="session-label">Sesion: {user?.first_name || 'Usuario'}</span>
         <div className="notification-wrap">
           <button className="icon-btn" type="button" onClick={onToggleNotifications} aria-label="Notificaciones"><Bell size={19} /></button>
           {notificationsOpen && (
@@ -739,7 +739,7 @@ function IntegrationStatus() {
     <div className="integration-card glass">
       <span><Database size={16} /> Sesion protegida</span>
       <span><Railway size={16} /> Operacion activa</span>
-      <span><ShieldCheck size={16} /> Control verificado</span>
+      <span><ShieldCheck size={16} /> Revision al dia</span>
     </div>
   );
 }
