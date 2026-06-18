@@ -236,9 +236,9 @@ function Header({ active, onMenu, user, searchQuery, onSearch }) {
   );
 }
 
-function VisitorTable({ visitors = [], wide = true }) {
+function VisitorTable({ visitors = [], wide = false }) {
   return (
-    <section className={`panel glass ${wide ? 'wide' : 'full'}`}>
+    <section className={`panel glass ${wide ? 'wide' : 'full'} visitor-panel`}>
       <div className="panel-head">
         <div>
           <p className="eyebrow">Registro vivo</p>

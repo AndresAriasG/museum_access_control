@@ -553,6 +553,10 @@ select,
   grid-column: 1 / -1;
 }
 
+.visitor-panel {
+  overflow: hidden;
+}
+
 .panel-head {
   justify-content: space-between;
   gap: 14px;
@@ -680,27 +684,36 @@ select,
 
 .table-row {
   display: grid;
-  grid-template-columns: minmax(150px, 1.4fr) minmax(130px, 1fr) 70px 100px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(70px, 0.45fr) minmax(88px, auto);
   align-items: center;
   gap: 12px;
   min-height: 62px;
   border-radius: 14px;
   padding: 12px 14px;
   background: rgba(255, 255, 255, 0.055);
+  min-width: 0;
 }
 
 .table-row div {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .table-row span {
   color: var(--muted);
   font-size: 0.88rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.table-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .history-row {
-  grid-template-columns: minmax(160px, 1.35fr) minmax(130px, 1fr) minmax(150px, 1fr) 100px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(130px, 1fr) minmax(88px, auto);
 }
 
 .empty-state {
