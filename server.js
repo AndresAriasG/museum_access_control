@@ -123,7 +123,7 @@ app.post("/api/rooms", requireDb, async (req, res) => {
 
 app.get("/api/dashboard", requireDb, async (_req, res) => {
   try {
-    const [kpis, hourly, rooms, recent, reports] = await Promise.all([
+    const [kpis, hourly, weekly, rooms, recent, reports] = await Promise.all([
       pool.query("SELECT * FROM museum_daily_kpis LIMIT 1"),
       pool.query(
         `SELECT to_char(hour_bucket, 'HH24:00') AS label, COUNT(ae.id)::int AS value
@@ -136,6 +136,20 @@ app.get("/api/dashboard", requireDb, async (_req, res) => {
            ON date_trunc('hour', ae.entered_at) = hour_bucket
          GROUP BY hour_bucket
          ORDER BY hour_bucket`
+      ),
+      pool.query(
+        `SELECT to_char(day_bucket, 'Dy') AS label,
+                to_char(day_bucket, 'YYYY-MM-DD') AS date,
+                COUNT(ae.id)::int AS value
+         FROM generate_series(
+           CURRENT_DATE - interval '6 days',
+           CURRENT_DATE,
+           interval '1 day'
+         ) day_bucket
+         LEFT JOIN museum_access_entries ae
+           ON ae.entered_at::date = day_bucket::date
+         GROUP BY day_bucket
+         ORDER BY day_bucket`
       ),
       pool.query(
         `SELECT r.id,
@@ -216,6 +230,7 @@ app.get("/api/dashboard", requireDb, async (_req, res) => {
         totalCapacity: rooms.rows.reduce((sum, room) => sum + Number(room.capacity || 0), 0)
       },
       hourly: hourly.rows,
+      weekly: weekly.rows,
       rooms: rooms.rows,
       recent: recent.rows,
       reports: {

@@ -51,6 +51,9 @@ museum2026
 
 Los visitantes guardan pais y ciudad en `museum_visitors.country` y `museum_visitors.city`.
 Las salas se administran desde el modulo `Salas` y se guardan en `museum_rooms`.
+La busqueda global filtra visitantes, salas, QR, ciudad, pais, tipo y estado.
+El modulo `Historial` permite exportar los ingresos filtrados a CSV.
+El dashboard muestra ingresos por hora y por dia de la semana.
 
 ## Railway
 

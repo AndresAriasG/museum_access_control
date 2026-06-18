@@ -54,6 +54,50 @@ async function api(path, options = {}) {
   return data;
 }
 
+function matchesSearch(item, query) {
+  if (!query.trim()) return true;
+  const value = query.toLowerCase();
+  return [
+    item.full_name,
+    item.visitor_type,
+    item.room,
+    item.ticket_code,
+    item.country,
+    item.city,
+    item.entered_at,
+    item.time,
+    item.status
+  ].some((field) => String(field || '').toLowerCase().includes(value));
+}
+
+function exportCsv(rows) {
+  const headers = ['Nombre', 'Tipo', 'Sala', 'Fecha/Hora', 'Estado', 'QR', 'Ciudad', 'Pais', 'Validado por'];
+  const escape = (value) => `"${String(value || '').replace(/"/g, '""')}"`;
+  const csv = [
+    headers.join(','),
+    ...rows.map((row) => [
+      row.full_name,
+      row.visitor_type,
+      row.room,
+      row.entered_at || row.time,
+      row.status,
+      row.ticket_code,
+      row.city,
+      row.country,
+      row.validated_by
+    ].map(escape).join(','))
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `ingresos-museo-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function Login({ onLogin }) {
   const [username, setUsername] = useState('admin@museo.gov');
   const [password, setPassword] = useState('museum2026');
@@ -166,7 +210,7 @@ function Sidebar({ active, onChange, open, onClose }) {
   );
 }
 
-function Header({ active, onMenu, user }) {
+function Header({ active, onMenu, user, searchQuery, onSearch }) {
   const title = navItems.find((item) => item.id === active)?.label ?? 'Dashboard';
   return (
     <header className="topbar glass">
@@ -178,7 +222,7 @@ function Header({ active, onMenu, user }) {
       <div className="topbar-actions">
         <div className="search-box">
           <Search size={17} />
-          <input placeholder="Buscar visitante, sala o QR" />
+          <input value={searchQuery} onChange={(event) => onSearch(event.target.value)} placeholder="Buscar visitante, sala o QR" />
         </div>
         <span className="user-chip">{user?.first_name || 'Usuario'}</span>
         <button className="icon-btn" aria-label="Notificaciones"><Bell size={19} /></button>
@@ -222,6 +266,7 @@ function Dashboard({ data }) {
     { label: 'Salas activas', value: data.rooms.length, delta: 'Operativas', icon: ShieldCheck, tone: 'rose' }
   ];
   const max = Math.max(...data.hourly.map((item) => Number(item.value)), 1);
+  const weeklyMax = Math.max(...data.weekly.map((item) => Number(item.value)), 1);
 
   return (
     <div className="view-grid">
@@ -266,6 +311,25 @@ function Dashboard({ data }) {
               <span>{room.name}</span>
               <div><i style={{ width: `${room.occupancy || 0}%` }} /></div>
               <strong>{room.occupancy || 0}%</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="panel glass full">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Tendencia semanal</p>
+            <h3>Ingresos por dia</h3>
+          </div>
+        </div>
+        <div className="weekly-chart">
+          {data.weekly.map((item) => (
+            <div className="weekly-item" key={item.date}>
+              <div className="weekly-bar">
+                <span style={{ height: `${Math.max(8, (Number(item.value) / weeklyMax) * 100)}%` }} />
+              </div>
+              <strong>{item.value}</strong>
+              <small>{item.label}</small>
             </div>
           ))}
         </div>
@@ -489,7 +553,7 @@ function QrModule() {
   );
 }
 
-function HistoryModule({ history }) {
+function HistoryModule({ history, searchQuery }) {
   return (
     <section className="panel glass full">
       <div className="panel-head">
@@ -497,8 +561,13 @@ function HistoryModule({ history }) {
           <p className="eyebrow">Auditoria</p>
           <h3>Historial de accesos</h3>
         </div>
+        <button className="ghost-btn" type="button" onClick={() => exportCsv(history)}>
+          Exportar CSV
+        </button>
       </div>
+      {searchQuery && <p className="empty-state">Filtro activo: {searchQuery}</p>}
       <div className="table">
+        {history.length === 0 && <p className="empty-state">No hay registros que coincidan con la busqueda.</p>}
         {history.map((item) => (
           <div className="table-row history-row" key={item.id}>
             <div>
@@ -565,6 +634,7 @@ function IntegrationStatus() {
 const emptyDashboard = {
   kpis: { visitorsToday: 0, qrValidationsToday: 0, visitorsInside: 0, totalCapacity: 0 },
   hourly: [],
+  weekly: [],
   rooms: [],
   recent: [],
   reports: { peakAccess: 'Sin datos', topRoom: 'Sin datos', topOrigin: 'Sin datos', qrConversion: '0%', totalVisitors: 0 }
@@ -578,6 +648,7 @@ function App() {
   const [history, setHistory] = useState([]);
   const [reports, setReports] = useState({});
   const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   async function loadData() {
     setError('');
@@ -600,13 +671,16 @@ function App() {
   }, [user]);
 
   const content = useMemo(() => {
+    const filteredRecent = dashboard.recent.filter((item) => matchesSearch(item, searchQuery));
+    const filteredHistory = history.filter((item) => matchesSearch(item, searchQuery));
+    const filteredDashboard = { ...dashboard, recent: filteredRecent };
     if (active === 'entrada') return <EntryModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
     if (active === 'salas') return <RoomsModule rooms={dashboard.rooms} onSaved={loadData} />;
     if (active === 'qr') return <QrModule />;
-    if (active === 'historial') return <HistoryModule history={history} />;
+    if (active === 'historial') return <HistoryModule history={filteredHistory} searchQuery={searchQuery} />;
     if (active === 'reportes') return <ReportsModule data={dashboard} reports={reports} />;
-    return <Dashboard data={dashboard} />;
-  }, [active, dashboard, history, reports, user]);
+    return <Dashboard data={filteredDashboard} />;
+  }, [active, dashboard, history, reports, user, searchQuery]);
 
   if (!user) return <Login onLogin={setUser} />;
 
@@ -614,7 +688,7 @@ function App() {
     <main className="app-shell">
       <Sidebar active={active} onChange={setActive} open={menuOpen} onClose={() => setMenuOpen(false)} />
       <section className="content-shell">
-        <Header active={active} onMenu={() => setMenuOpen(true)} user={user} />
+        <Header active={active} onMenu={() => setMenuOpen(true)} user={user} searchQuery={searchQuery} onSearch={setSearchQuery} />
         {error && <p className="form-message error">{error}</p>}
         {content}
         <IntegrationStatus />
