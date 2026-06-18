@@ -56,7 +56,7 @@ La busqueda global se aplica con boton `Buscar` y filtra visitantes, salas, QR, 
 La campana muestra alertas operativas como salas pendientes o visitantes dentro.
 El modulo `Historial` tiene una busqueda propia visible y permite exportar los ingresos filtrados a CSV.
 El modulo `Reportes` permite filtrar accesos por rango de fechas, ver rankings y exportar CSV.
-El dashboard muestra ingresos por hora y por dia de la semana.
+El dashboard muestra primero ingresos por dia y debajo el detalle por hora con etiquetas visibles.
 El registro valida que el nombre tenga solo letras y que el email tenga formato de correo.
 
 ## Railway

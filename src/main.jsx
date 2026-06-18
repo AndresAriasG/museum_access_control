@@ -317,21 +317,6 @@ function Dashboard({ data }) {
           );
         })}
       </section>
-      <section className="panel glass wide">
-        <div className="panel-head">
-          <div>
-            <p className="eyebrow">Flujo en tiempo real</p>
-            <h3>Accesos por hora</h3>
-          </div>
-        </div>
-        <div className="chart-bars" aria-label="Grafico de accesos">
-          {data.hourly.map((item) => (
-            <div className="bar-wrap" key={item.label} title={`${item.label}: ${item.value}`}>
-              <span style={{ height: `${Math.max(8, (Number(item.value) / max) * 100)}%` }} />
-            </div>
-          ))}
-        </div>
-      </section>
       <section className="panel glass">
         <div className="panel-head">
           <div>
@@ -352,7 +337,7 @@ function Dashboard({ data }) {
       <section className="panel glass full">
         <div className="panel-head">
           <div>
-            <p className="eyebrow">Tendencia semanal</p>
+            <p className="eyebrow">Resumen semanal</p>
             <h3>Ingresos por dia</h3>
           </div>
         </div>
@@ -361,6 +346,25 @@ function Dashboard({ data }) {
             <div className="weekly-item" key={item.date}>
               <div className="weekly-bar">
                 <span style={{ height: `${Math.max(8, (Number(item.value) / weeklyMax) * 100)}%` }} />
+              </div>
+              <strong>{item.value}</strong>
+              <small>{item.label}</small>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="panel glass full">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Detalle horario</p>
+            <h3>Accesos por hora</h3>
+          </div>
+        </div>
+        <div className="hourly-chart" aria-label="Grafico de accesos por hora">
+          {data.hourly.map((item) => (
+            <div className="hourly-item" key={item.label} title={`${item.label}: ${item.value}`}>
+              <div className="bar-wrap">
+                <span style={{ height: `${Math.max(8, (Number(item.value) / max) * 100)}%` }} />
               </div>
               <strong>{item.value}</strong>
               <small>{item.label}</small>
