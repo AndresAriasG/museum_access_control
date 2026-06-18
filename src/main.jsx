@@ -565,7 +565,7 @@ function QrModule() {
   );
 }
 
-function HistoryModule({ history, searchQuery }) {
+function HistoryModule({ history, searchQuery, onSearch }) {
   return (
     <section className="panel glass full">
       <div className="panel-head">
@@ -573,11 +573,19 @@ function HistoryModule({ history, searchQuery }) {
           <p className="eyebrow">Auditoria</p>
           <h3>Historial de accesos</h3>
         </div>
-        <button className="ghost-btn" type="button" onClick={() => exportCsv(history)}>
+      </div>
+      <div className="history-toolbar">
+        <div className="search-box history-search">
+          <Search size={17} />
+          <input value={searchQuery} onChange={(event) => onSearch(event.target.value)} placeholder="Buscar por nombre, QR, sala, ciudad, pais o estado" />
+        </div>
+        <button className="primary-btn export-btn" type="button" onClick={() => exportCsv(history)}>
           Exportar CSV
         </button>
       </div>
-      {searchQuery && <p className="empty-state">Filtro activo: {searchQuery}</p>}
+      <p className="empty-state">
+        {searchQuery ? `${history.length} resultado(s) para "${searchQuery}"` : `${history.length} ingreso(s) recientes`}
+      </p>
       <div className="table">
         {history.length === 0 && <p className="empty-state">No hay registros que coincidan con la busqueda.</p>}
         {history.map((item) => (
@@ -697,7 +705,7 @@ function App() {
     if (active === 'entrada') return <EntryModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
     if (active === 'salas') return <RoomsModule rooms={dashboard.rooms} onSaved={loadData} />;
     if (active === 'qr') return <QrModule />;
-    if (active === 'historial') return <HistoryModule history={filteredHistory} searchQuery={searchQuery} />;
+    if (active === 'historial') return <HistoryModule history={filteredHistory} searchQuery={searchQuery} onSearch={setSearchQuery} />;
     if (active === 'reportes') return <ReportsModule data={dashboard} reports={reports} />;
     return <Dashboard data={filteredDashboard} />;
   }, [active, dashboard, history, reports, user, searchQuery]);

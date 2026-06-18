@@ -453,6 +453,22 @@ select,
   padding: 0 12px;
 }
 
+.history-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.history-search {
+  width: 100%;
+}
+
+.export-btn {
+  min-width: 150px;
+}
+
 .user-chip {
   min-height: 34px;
   border-radius: 999px;
@@ -912,6 +928,18 @@ mark {
 
   .search-box {
     display: none;
+  }
+
+  .history-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .history-search {
+    display: flex;
+  }
+
+  .export-btn {
+    width: 100%;
   }
 
   .kpi-grid {
