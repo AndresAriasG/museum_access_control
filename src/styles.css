@@ -432,10 +432,13 @@ select,
 }
 
 .topbar {
+  position: relative;
+  z-index: 100;
   justify-content: space-between;
   gap: 18px;
   border-radius: 20px;
   padding: 17px 18px;
+  overflow: visible;
 }
 
 .menu-btn {
@@ -465,11 +468,12 @@ select,
 
 .notification-wrap {
   position: relative;
+  z-index: 120;
 }
 
 .notification-panel {
   position: absolute;
-  z-index: 30;
+  z-index: 500;
   top: calc(100% + 10px);
   right: 0;
   display: grid;
