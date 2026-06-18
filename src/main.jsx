@@ -173,8 +173,8 @@ function Login({ onLogin }) {
           </button>
         </form>
         <div className="integration-strip">
-          <span><Database size={15} /> PostgreSQL conectado</span>
-          <span><Railway size={15} /> Railway deploy</span>
+          <span><Database size={15} /> Sesion protegida</span>
+          <span><Railway size={15} /> Operacion segura</span>
         </div>
       </div>
     </section>
@@ -206,8 +206,8 @@ function Sidebar({ active, onChange, open, onClose }) {
         </nav>
         <div className="sidebar-card">
           <p>Integracion</p>
-          <strong>Datos en vivo</strong>
-          <span>Login, entradas, QR, historial y reportes usan PostgreSQL.</span>
+          <strong>Operacion activa</strong>
+          <span>Accesos, validaciones, historial y reportes actualizados.</span>
         </div>
       </aside>
       <button className={`scrim ${open ? 'is-visible' : ''}`} onClick={onClose} aria-label="Cerrar menu" />
@@ -265,7 +265,7 @@ function VisitorTable({ visitors = [], wide = false }) {
 
 function Dashboard({ data }) {
   const kpis = [
-    { label: 'Visitantes hoy', value: data.kpis.visitorsToday, delta: 'Desde PostgreSQL', icon: UsersRound, tone: 'cyan' },
+    { label: 'Visitantes hoy', value: data.kpis.visitorsToday, delta: 'Actualizado', icon: UsersRound, tone: 'cyan' },
     { label: 'QR validados hoy', value: data.kpis.qrValidationsToday, delta: 'Tickets usados', icon: TicketCheck, tone: 'green' },
     { label: 'Visitantes dentro', value: data.kpis.visitorsInside, delta: `${data.kpis.totalCapacity} capacidad`, icon: Gauge, tone: 'amber' },
     { label: 'Salas activas', value: data.rooms.length, delta: 'Operativas', icon: ShieldCheck, tone: 'rose' }
@@ -433,7 +433,7 @@ function EntryModule({ rooms, user, onSaved }) {
       <div className="panel glass accent-panel">
         <CalendarDays size={34} />
         <h3>Turno actual</h3>
-        <p>Control de capacidad, horario de visita y trazabilidad de entrada conectado a PostgreSQL.</p>
+        <p>Control de capacidad, horario de visita y trazabilidad de entrada en una sola operacion.</p>
         <div className="metric-line"><span>Salas disponibles</span><strong>{rooms.length}</strong></div>
         <div className="metric-line"><span>Operador</span><strong>{user?.first_name || 'Activo'}</strong></div>
       </div>
@@ -706,9 +706,9 @@ function ReportsModule({ data, reports, accessReport, reportRange, onRangeChange
 function IntegrationStatus() {
   return (
     <div className="integration-card glass">
-      <span><Database size={16} /> PostgreSQL live</span>
-      <span><Railway size={16} /> Railway env vars</span>
-      <span><ShieldCheck size={16} /> API conectada</span>
+      <span><Database size={16} /> Sesion protegida</span>
+      <span><Railway size={16} /> Operacion activa</span>
+      <span><ShieldCheck size={16} /> Control verificado</span>
     </div>
   );
 }
