@@ -28,6 +28,10 @@ function ticketCode() {
   return `MAC-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
 }
 
+function searchValue(req) {
+  return String(req.query.search || "").trim();
+}
+
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
@@ -121,7 +125,10 @@ app.post("/api/rooms", requireDb, async (req, res) => {
   }
 });
 
-app.get("/api/dashboard", requireDb, async (_req, res) => {
+app.get("/api/dashboard", requireDb, async (req, res) => {
+  const search = searchValue(req);
+  const recentSearch = `%${search}%`;
+
   try {
     const [kpis, hourly, weekly, rooms, recent, reports] = await Promise.all([
       pool.query("SELECT * FROM museum_daily_kpis LIMIT 1"),
@@ -175,8 +182,18 @@ app.get("/api/dashboard", requireDb, async (_req, res) => {
          FROM museum_access_entries ae
          JOIN museum_visitors v ON v.id = ae.visitor_id
          LEFT JOIN museum_rooms r ON r.id = ae.room_id
+         LEFT JOIN museum_qr_tickets t ON t.id = ae.ticket_id
+         WHERE ($1 = ''
+           OR v.full_name ILIKE $2
+           OR v.visitor_type ILIKE $2
+           OR v.country ILIKE $2
+           OR v.city ILIKE $2
+           OR r.name ILIKE $2
+           OR t.ticket_code ILIKE $2
+           OR ae.status ILIKE $2)
          ORDER BY ae.entered_at DESC
-         LIMIT 8`
+         LIMIT 8`,
+        [search, recentSearch]
       ),
       pool.query(
         `SELECT
@@ -249,6 +266,8 @@ app.get("/api/dashboard", requireDb, async (_req, res) => {
 
 app.post("/api/entries", requireDb, async (req, res) => {
   const { fullName, documentNumber, visitorType, email, country, city, roomId, validatedBy } = req.body;
+  const cleanName = String(fullName || "").trim();
+  const cleanEmail = String(email || "").trim();
   const requiredFields = { fullName, documentNumber, visitorType, email, country, city, roomId };
   const missingFields = Object.entries(requiredFields)
     .filter(([, value]) => !String(value || "").trim())
@@ -256,6 +275,14 @@ app.post("/api/entries", requireDb, async (req, res) => {
 
   if (missingFields.length > 0) {
     return res.status(400).json({ error: "Todos los campos del registro son obligatorios" });
+  }
+
+  if (!/^[\p{L}\s]+$/u.test(cleanName)) {
+    return res.status(400).json({ error: "El nombre solo debe contener letras y espacios" });
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return res.status(400).json({ error: "El email debe tener un formato valido" });
   }
 
   const client = await pool.connect();
@@ -268,10 +295,10 @@ app.post("/api/entries", requireDb, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, full_name, visitor_type, country, city`,
       [
-        fullName.trim(),
+        cleanName,
         documentNumber.trim(),
         visitorType.trim(),
-        email.trim(),
+        cleanEmail,
         country.trim(),
         city.trim()
       ]
@@ -345,7 +372,10 @@ app.post("/api/qr/validate", requireDb, async (req, res) => {
   }
 });
 
-app.get("/api/history", requireDb, async (_req, res) => {
+app.get("/api/history", requireDb, async (req, res) => {
+  const search = searchValue(req);
+  const historySearch = `%${search}%`;
+
   try {
     const result = await pool.query(
       `SELECT ae.id,
@@ -363,8 +393,19 @@ app.get("/api/history", requireDb, async (_req, res) => {
        LEFT JOIN museum_rooms r ON r.id = ae.room_id
        LEFT JOIN museum_qr_tickets t ON t.id = ae.ticket_id
        LEFT JOIN museum_auth_users u ON u.id = ae.validated_by
+       WHERE ($1 = ''
+         OR v.full_name ILIKE $2
+         OR v.visitor_type ILIKE $2
+         OR v.country ILIKE $2
+         OR v.city ILIKE $2
+         OR r.name ILIKE $2
+         OR t.ticket_code ILIKE $2
+         OR u.username ILIKE $2
+         OR ae.status ILIKE $2
+         OR to_char(ae.entered_at, 'YYYY-MM-DD HH24:MI') ILIKE $2)
        ORDER BY ae.entered_at DESC
-       LIMIT 50`
+       LIMIT 50`,
+      [search, historySearch]
     );
 
     res.json({ history: result.rows });

@@ -54,6 +54,11 @@ async function api(path, options = {}) {
   return data;
 }
 
+function withSearch(path, query) {
+  if (!query.trim()) return path;
+  return `${path}?search=${encodeURIComponent(query.trim())}`;
+}
+
 function matchesSearch(item, query) {
   if (!query.trim()) return true;
   const value = query.toLowerCase();
@@ -394,7 +399,14 @@ function EntryModule({ rooms, user, onSaved }) {
         </div>
         <form className="stack-form" onSubmit={submit}>
           {rooms.length === 0 && <p className="form-message error">Primero registra una sala en el modulo Salas.</p>}
-          <input required placeholder="Nombre completo" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} />
+          <input
+            required
+            pattern="[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+"
+            title="Solo letras y espacios"
+            placeholder="Nombre completo"
+            value={form.fullName}
+            onChange={(event) => setForm({ ...form, fullName: event.target.value })}
+          />
           <select required value={form.visitorType} onChange={(event) => setForm({ ...form, visitorType: event.target.value })}>
             <option>General</option>
             <option>VIP</option>
@@ -654,8 +666,8 @@ function App() {
     setError('');
     try {
       const [dashboardData, historyData, reportData] = await Promise.all([
-        api('/api/dashboard'),
-        api('/api/history'),
+        api(withSearch('/api/dashboard', searchQuery)),
+        api(withSearch('/api/history', searchQuery)),
         api('/api/reports')
       ]);
       setDashboard(dashboardData);
@@ -669,6 +681,14 @@ function App() {
   useEffect(() => {
     if (user) loadData();
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    const timer = window.setTimeout(() => {
+      loadData();
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
 
   const content = useMemo(() => {
     const filteredRecent = dashboard.recent.filter((item) => matchesSearch(item, searchQuery));
