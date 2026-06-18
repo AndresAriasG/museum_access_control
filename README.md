@@ -1,4 +1,4 @@
-# Museum Access Control
+# Museo del Zocalo Control de Acceso
 
 Interfaz React + Vite para control de acceso de museo, con backend Express preparado para PostgreSQL y Railway.
 

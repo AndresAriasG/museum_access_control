@@ -83,7 +83,7 @@ function Login({ onLogin }) {
         <div className="orbital orbital-two" />
         <div className="museum-mark">
           <Fingerprint size={58} />
-          <span>Museum Access Control</span>
+          <span>Museo del Zocalo Control de Acceso</span>
         </div>
       </div>
       <div className="login-panel glass">
@@ -91,7 +91,7 @@ function Login({ onLogin }) {
           <div className="brand-icon"><ShieldCheck size={24} /></div>
           <div>
             <p className="eyebrow">Control ejecutivo</p>
-            <h1>museum_access_control</h1>
+            <h1>Museo del Zocalo Control de Acceso</h1>
           </div>
         </div>
         <form className="login-form" onSubmit={submit}>
@@ -138,7 +138,7 @@ function Sidebar({ active, onChange, open, onClose }) {
         <div className="sidebar-head">
           <div className="brand-icon"><Fingerprint size={24} /></div>
           <div>
-            <strong>Museum AC</strong>
+            <strong>Museo del Zocalo</strong>
             <span>Security Suite</span>
           </div>
           <button className="icon-btn close-btn" onClick={onClose} aria-label="Cerrar menu"><X size={18} /></button>
