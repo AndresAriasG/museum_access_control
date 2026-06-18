@@ -42,6 +42,7 @@ museum2026
 - `POST /api/login`
 - `GET /api/dashboard`
 - `GET /api/rooms`
+- `POST /api/rooms`
 - `POST /api/entries`
 - `POST /api/qr/validate`
 - `GET /api/history`
@@ -49,6 +50,7 @@ museum2026
 - `POST /api/access-users/init`
 
 Los visitantes guardan pais y ciudad en `museum_visitors.country` y `museum_visitors.city`.
+Las salas se administran desde el modulo `Salas` y se guardan en `museum_rooms`.
 
 ## Railway
 

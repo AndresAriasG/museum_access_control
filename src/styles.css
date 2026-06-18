@@ -568,7 +568,8 @@ select,
 
 .room-list,
 .table,
-.insight-grid {
+.insight-grid,
+.room-admin-list {
   display: grid;
   gap: 12px;
 }
@@ -594,6 +595,27 @@ select,
   height: 100%;
   border-radius: inherit;
   background: var(--cyan);
+}
+
+.room-admin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 64px;
+  border-radius: 14px;
+  padding: 13px 14px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.room-admin-row div {
+  display: grid;
+  gap: 4px;
+}
+
+.room-admin-row span {
+  color: var(--muted);
+  font-size: 0.86rem;
 }
 
 .table-row {

@@ -94,6 +94,33 @@ app.get("/api/rooms", requireDb, async (_req, res) => {
   }
 });
 
+app.post("/api/rooms", requireDb, async (req, res) => {
+  const { name, capacity } = req.body;
+  const cleanName = String(name || "").trim();
+  const parsedCapacity = Number(capacity);
+
+  if (!cleanName || !Number.isInteger(parsedCapacity) || parsedCapacity <= 0) {
+    return res.status(400).json({ error: "Nombre y capacidad valida son obligatorios" });
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO museum_rooms (name, capacity, is_active)
+       VALUES ($1, $2, true)
+       ON CONFLICT (name) DO UPDATE
+       SET capacity = EXCLUDED.capacity,
+           is_active = true
+       RETURNING id, name, capacity, is_active`,
+      [cleanName, parsedCapacity]
+    );
+
+    res.status(201).json({ room: result.rows[0] });
+  } catch (error) {
+    console.error("Room creation failed:", error);
+    res.status(500).json({ error: "No se pudo guardar la sala" });
+  }
+});
+
 app.get("/api/dashboard", requireDb, async (_req, res) => {
   try {
     const [kpis, hourly, rooms, recent, reports] = await Promise.all([

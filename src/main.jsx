@@ -38,6 +38,7 @@ const X = (props) => <Icon {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'entrada', label: 'Registrar Entrada', icon: DoorOpen },
+  { id: 'salas', label: 'Salas', icon: Gauge },
   { id: 'qr', label: 'Validar QR', icon: QrCode },
   { id: 'historial', label: 'Historial', icon: History },
   { id: 'reportes', label: 'Reportes', icon: BarChart3 }
@@ -328,6 +329,7 @@ function EntryModule({ rooms, user, onSaved }) {
           </div>
         </div>
         <form className="stack-form" onSubmit={submit}>
+          {rooms.length === 0 && <p className="form-message error">Primero registra una sala en el modulo Salas.</p>}
           <input required placeholder="Nombre completo" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} />
           <select required value={form.visitorType} onChange={(event) => setForm({ ...form, visitorType: event.target.value })}>
             <option>General</option>
@@ -342,10 +344,11 @@ function EntryModule({ rooms, user, onSaved }) {
             <input required placeholder="Ciudad" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
           </div>
           <select required value={form.roomId} onChange={(event) => setForm({ ...form, roomId: event.target.value })}>
+            <option value="" disabled>Selecciona una sala</option>
             {rooms.map((room) => <option value={room.id} key={room.id}>{room.name}</option>)}
           </select>
           {message && <p className="form-message">{message}</p>}
-          <button className="primary-btn" type="submit" disabled={loading}>
+          <button className="primary-btn" type="submit" disabled={loading || rooms.length === 0}>
             <CheckCircle2 size={18} />
             {loading ? 'Registrando...' : 'Registrar acceso'}
           </button>
@@ -357,6 +360,73 @@ function EntryModule({ rooms, user, onSaved }) {
         <p>Control de capacidad, horario de visita y trazabilidad de entrada conectado a PostgreSQL.</p>
         <div className="metric-line"><span>Salas disponibles</span><strong>{rooms.length}</strong></div>
         <div className="metric-line"><span>Operador</span><strong>{user?.first_name || 'Activo'}</strong></div>
+      </div>
+    </section>
+  );
+}
+
+function RoomsModule({ rooms, onSaved }) {
+  const [form, setForm] = useState({ name: '', capacity: '' });
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage('');
+    try {
+      const data = await api('/api/rooms', {
+        method: 'POST',
+        body: JSON.stringify({ name: form.name, capacity: Number(form.capacity) })
+      });
+      setMessage(`Sala guardada: ${data.room.name}`);
+      setForm({ name: '', capacity: '' });
+      onSaved();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <section className="module-layout">
+      <div className="panel glass">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Administracion</p>
+            <h3>Registrar Sala</h3>
+          </div>
+        </div>
+        <form className="stack-form" onSubmit={submit}>
+          <input required placeholder="Nombre de la sala" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          <input required min="1" type="number" placeholder="Capacidad" value={form.capacity} onChange={(event) => setForm({ ...form, capacity: event.target.value })} />
+          {message && <p className="form-message">{message}</p>}
+          <button className="primary-btn" type="submit" disabled={loading}>
+            <CheckCircle2 size={18} />
+            {loading ? 'Guardando...' : 'Guardar sala'}
+          </button>
+        </form>
+      </div>
+      <div className="panel glass">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Disponibles</p>
+            <h3>Salas registradas</h3>
+          </div>
+        </div>
+        <div className="room-admin-list">
+          {rooms.length === 0 && <p className="empty-state">No hay salas registradas todavia.</p>}
+          {rooms.map((room) => (
+            <div className="room-admin-row" key={room.id}>
+              <div>
+                <strong>{room.name}</strong>
+                <span>Capacidad {room.capacity}</span>
+              </div>
+              <mark>Activa</mark>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -531,6 +601,7 @@ function App() {
 
   const content = useMemo(() => {
     if (active === 'entrada') return <EntryModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
+    if (active === 'salas') return <RoomsModule rooms={dashboard.rooms} onSaved={loadData} />;
     if (active === 'qr') return <QrModule />;
     if (active === 'historial') return <HistoryModule history={history} />;
     if (active === 'reportes') return <ReportsModule data={dashboard} reports={reports} />;
