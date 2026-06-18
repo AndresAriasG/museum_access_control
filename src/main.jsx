@@ -215,7 +215,19 @@ function Sidebar({ active, onChange, open, onClose }) {
   );
 }
 
-function Header({ active, onMenu, user, searchQuery, onSearch }) {
+function Header({
+  active,
+  onMenu,
+  user,
+  searchQuery,
+  searchDraft,
+  onSearchDraft,
+  onSearchSubmit,
+  onClearSearch,
+  notifications,
+  notificationsOpen,
+  onToggleNotifications
+}) {
   const title = navItems.find((item) => item.id === active)?.label ?? 'Dashboard';
   return (
     <header className="topbar glass">
@@ -225,12 +237,29 @@ function Header({ active, onMenu, user, searchQuery, onSearch }) {
         <h2>{title}</h2>
       </div>
       <div className="topbar-actions">
-        <div className="search-box">
-          <Search size={17} />
-          <input value={searchQuery} onChange={(event) => onSearch(event.target.value)} placeholder="Buscar visitante, sala o QR" />
-        </div>
+        <form className="search-form" onSubmit={onSearchSubmit}>
+          <div className="search-box">
+            <Search size={17} />
+            <input value={searchDraft} onChange={(event) => onSearchDraft(event.target.value)} placeholder="Buscar visitante, sala o QR" />
+          </div>
+          <button className="ghost-btn search-action" type="submit">Buscar</button>
+          {searchQuery && <button className="ghost-btn search-action" type="button" onClick={onClearSearch}>Limpiar</button>}
+        </form>
         <span className="user-chip">{user?.first_name || 'Usuario'}</span>
-        <button className="icon-btn" aria-label="Notificaciones"><Bell size={19} /></button>
+        <div className="notification-wrap">
+          <button className="icon-btn" type="button" onClick={onToggleNotifications} aria-label="Notificaciones"><Bell size={19} /></button>
+          {notificationsOpen && (
+            <div className="notification-panel glass">
+              <p className="eyebrow">Alertas</p>
+              {notifications.map((item) => (
+                <div className="notification-item" key={item.title}>
+                  <strong>{item.title}</strong>
+                  <span>{item.body}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
@@ -565,7 +594,7 @@ function QrModule() {
   );
 }
 
-function HistoryModule({ history, searchQuery, onSearch }) {
+function HistoryModule({ history, searchQuery, searchDraft, onSearchDraft, onSearchSubmit, onClearSearch }) {
   return (
     <section className="panel glass full">
       <div className="panel-head">
@@ -574,15 +603,17 @@ function HistoryModule({ history, searchQuery, onSearch }) {
           <h3>Historial de accesos</h3>
         </div>
       </div>
-      <div className="history-toolbar">
+      <form className="history-toolbar" onSubmit={onSearchSubmit}>
         <div className="search-box history-search">
           <Search size={17} />
-          <input value={searchQuery} onChange={(event) => onSearch(event.target.value)} placeholder="Buscar por nombre, QR, sala, ciudad, pais o estado" />
+          <input value={searchDraft} onChange={(event) => onSearchDraft(event.target.value)} placeholder="Buscar por nombre, QR, sala, ciudad, pais o estado" />
         </div>
+        <button className="ghost-btn" type="submit">Buscar</button>
+        {searchQuery && <button className="ghost-btn" type="button" onClick={onClearSearch}>Limpiar</button>}
         <button className="primary-btn export-btn" type="button" onClick={() => exportCsv(history)}>
           Exportar CSV
         </button>
-      </div>
+      </form>
       <p className="empty-state">
         {searchQuery ? `${history.length} resultado(s) para "${searchQuery}"` : `${history.length} ingreso(s) recientes`}
       </p>
@@ -741,6 +772,8 @@ function App() {
   const [reportRange, setReportRange] = useState({ from: weekAgo, to: today });
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   async function loadAccessReport(range = reportRange) {
     const params = new URLSearchParams({ from: range.from, to: range.to });
@@ -773,9 +806,38 @@ function App() {
     if (!user) return undefined;
     const timer = window.setTimeout(() => {
       loadData();
-    }, 250);
+    }, 100);
     return () => window.clearTimeout(timer);
   }, [searchQuery]);
+
+  function applySearch(event) {
+    event?.preventDefault();
+    const nextSearch = searchDraft.trim();
+    if (nextSearch === searchQuery) {
+      loadData();
+      return;
+    }
+    setSearchQuery(nextSearch);
+  }
+
+  function clearSearch() {
+    setSearchDraft('');
+    setSearchQuery('');
+  }
+
+  const notifications = useMemo(() => {
+    const items = [];
+    if (dashboard.rooms.length === 0) {
+      items.push({ title: 'Sin salas registradas', body: 'Crea al menos una sala para registrar entradas.' });
+    }
+    if (dashboard.kpis.visitorsInside > 0) {
+      items.push({ title: 'Visitantes dentro', body: `${dashboard.kpis.visitorsInside} visitante(s) permanecen en el museo.` });
+    }
+    if (items.length === 0) {
+      items.push({ title: 'Sin alertas criticas', body: 'La operacion se encuentra estable.' });
+    }
+    return items;
+  }, [dashboard]);
 
   const content = useMemo(() => {
     const filteredRecent = dashboard.recent.filter((item) => matchesSearch(item, searchQuery));
@@ -784,7 +846,18 @@ function App() {
     if (active === 'entrada') return <EntryModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
     if (active === 'salas') return <RoomsModule rooms={dashboard.rooms} onSaved={loadData} />;
     if (active === 'qr') return <QrModule />;
-    if (active === 'historial') return <HistoryModule history={filteredHistory} searchQuery={searchQuery} onSearch={setSearchQuery} />;
+    if (active === 'historial') {
+      return (
+        <HistoryModule
+          history={filteredHistory}
+          searchQuery={searchQuery}
+          searchDraft={searchDraft}
+          onSearchDraft={setSearchDraft}
+          onSearchSubmit={applySearch}
+          onClearSearch={clearSearch}
+        />
+      );
+    }
     if (active === 'reportes') {
       return (
         <ReportsModule
@@ -798,7 +871,7 @@ function App() {
       );
     }
     return <Dashboard data={filteredDashboard} />;
-  }, [active, dashboard, history, reports, user, searchQuery, accessReport, reportRange]);
+  }, [active, dashboard, history, reports, user, searchQuery, searchDraft, accessReport, reportRange, notifications]);
 
   if (!user) return <Login onLogin={setUser} />;
 
@@ -806,7 +879,19 @@ function App() {
     <main className="app-shell">
       <Sidebar active={active} onChange={setActive} open={menuOpen} onClose={() => setMenuOpen(false)} />
       <section className="content-shell">
-        <Header active={active} onMenu={() => setMenuOpen(true)} user={user} searchQuery={searchQuery} onSearch={setSearchQuery} />
+        <Header
+          active={active}
+          onMenu={() => setMenuOpen(true)}
+          user={user}
+          searchQuery={searchQuery}
+          searchDraft={searchDraft}
+          onSearchDraft={setSearchDraft}
+          onSearchSubmit={applySearch}
+          onClearSearch={clearSearch}
+          notifications={notifications}
+          notificationsOpen={notificationsOpen}
+          onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+        />
         {error && <p className="form-message error">{error}</p>}
         {content}
         <IntegrationStatus />
