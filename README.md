@@ -47,12 +47,14 @@ museum2026
 - `POST /api/qr/validate`
 - `GET /api/history`
 - `GET /api/reports`
+- `GET /api/reports/accesses`
 - `POST /api/access-users/init`
 
 Los visitantes guardan pais y ciudad en `museum_visitors.country` y `museum_visitors.city`.
 Las salas se administran desde el modulo `Salas` y se guardan en `museum_rooms`.
 La busqueda global consulta PostgreSQL y filtra visitantes, salas, QR, ciudad, pais, tipo, fecha y estado.
 El modulo `Historial` tiene una busqueda propia visible y permite exportar los ingresos filtrados a CSV.
+El modulo `Reportes` permite filtrar accesos por rango de fechas, ver rankings y exportar CSV.
 El dashboard muestra ingresos por hora y por dia de la semana.
 El registro valida que el nombre tenga solo letras y que el email tenga formato de correo.
 

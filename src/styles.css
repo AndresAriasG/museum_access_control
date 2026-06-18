@@ -812,6 +812,61 @@ mark {
   grid-template-columns: repeat(3, 1fr);
 }
 
+.report-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 220px)) auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.report-filters label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.report-summary {
+  margin-bottom: 14px;
+}
+
+.ranking-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.ranking-list {
+  display: grid;
+  gap: 10px;
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.ranking-list h3 {
+  font-size: 0.98rem;
+}
+
+.ranking-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+
+.ranking-row span {
+  color: var(--muted);
+}
+
+.report-table {
+  margin-top: 8px;
+}
+
 .insight-grid div {
   display: grid;
   gap: 6px;
@@ -956,6 +1011,11 @@ mark {
   }
 
   .insight-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-filters,
+  .ranking-grid {
     grid-template-columns: 1fr;
   }
 

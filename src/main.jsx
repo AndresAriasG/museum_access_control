@@ -604,12 +604,28 @@ function HistoryModule({ history, searchQuery, onSearch }) {
   );
 }
 
-function ReportsModule({ data, reports }) {
+function RankingList({ title, items }) {
+  return (
+    <div className="ranking-list">
+      <h3>{title}</h3>
+      {items.length === 0 && <p className="empty-state">Sin datos en el rango.</p>}
+      {items.map((item) => (
+        <div className="ranking-row" key={item.label}>
+          <span>{item.label}</span>
+          <strong>{item.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ReportsModule({ data, reports, accessReport, reportRange, onRangeChange, onRefreshReport }) {
   const cards = [
     { label: 'Pico de acceso', value: data.reports.peakAccess, icon: Clock3 },
     { label: 'Sala mas visitada', value: data.reports.topRoom, icon: AreaChart },
     { label: 'Origen principal', value: data.reports.topOrigin, icon: UsersRound }
   ];
+  const summary = accessReport.summary || {};
 
   return (
     <section className="view-grid">
@@ -628,13 +644,59 @@ function ReportsModule({ data, reports }) {
         <div className="panel-head">
           <div>
             <p className="eyebrow">Reportes ejecutivos</p>
-            <h3>Resumen conectado a PostgreSQL</h3>
+            <h3>Resumen general</h3>
           </div>
         </div>
         <div className="insight-grid">
           <div><strong>{reports.total_entries || 0}</strong><span>Entradas totales</span></div>
           <div><strong>{reports.countries_count || 0}</strong><span>Paises registrados</span></div>
           <div><strong>{reports.cities_count || 0}</strong><span>Ciudades registradas</span></div>
+        </div>
+      </section>
+      <section className="panel glass full">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Exportacion</p>
+            <h3>Lista de accesos</h3>
+          </div>
+          <button className="primary-btn export-btn" type="button" onClick={() => exportCsv(accessReport.accesses || [])}>
+            Exportar CSV
+          </button>
+        </div>
+        <div className="report-filters">
+          <label>
+            Desde
+            <input type="date" value={reportRange.from} onChange={(event) => onRangeChange({ ...reportRange, from: event.target.value })} />
+          </label>
+          <label>
+            Hasta
+            <input type="date" value={reportRange.to} onChange={(event) => onRangeChange({ ...reportRange, to: event.target.value })} />
+          </label>
+          <button className="ghost-btn" type="button" onClick={onRefreshReport}>Actualizar</button>
+        </div>
+        <div className="insight-grid report-summary">
+          <div><strong>{summary.total_entries || 0}</strong><span>Accesos del rango</span></div>
+          <div><strong>{summary.unique_visitors || 0}</strong><span>Visitantes unicos</span></div>
+          <div><strong>{summary.qr_entries || 0}</strong><span>Accesos con QR</span></div>
+        </div>
+        <div className="ranking-grid">
+          <RankingList title="Top paises" items={accessReport.rankings?.countries || []} />
+          <RankingList title="Top ciudades" items={accessReport.rankings?.cities || []} />
+          <RankingList title="Top salas" items={accessReport.rankings?.rooms || []} />
+        </div>
+        <div className="table report-table">
+          {(accessReport.accesses || []).length === 0 && <p className="empty-state">No hay accesos en el rango seleccionado.</p>}
+          {(accessReport.accesses || []).slice(0, 10).map((item) => (
+            <div className="table-row history-row" key={item.id}>
+              <div>
+                <strong>{item.full_name}</strong>
+                <span>{item.ticket_code || 'Sin QR'} · {[item.city, item.country].filter(Boolean).join(', ') || 'Sin origen'}</span>
+              </div>
+              <span>{item.room}</span>
+              <span>{item.entered_at}</span>
+              <mark>{item.status}</mark>
+            </div>
+          ))}
         </div>
       </section>
     </section>
@@ -660,6 +722,14 @@ const emptyDashboard = {
   reports: { peakAccess: 'Sin datos', topRoom: 'Sin datos', topOrigin: 'Sin datos', qrConversion: '0%', totalVisitors: 0 }
 };
 
+const today = new Date().toISOString().slice(0, 10);
+const weekAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const emptyAccessReport = {
+  summary: {},
+  accesses: [],
+  rankings: { countries: [], cities: [], rooms: [] }
+};
+
 function App() {
   const [user, setUser] = useState(null);
   const [active, setActive] = useState('dashboard');
@@ -667,8 +737,16 @@ function App() {
   const [dashboard, setDashboard] = useState(emptyDashboard);
   const [history, setHistory] = useState([]);
   const [reports, setReports] = useState({});
+  const [accessReport, setAccessReport] = useState(emptyAccessReport);
+  const [reportRange, setReportRange] = useState({ from: weekAgo, to: today });
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+
+  async function loadAccessReport(range = reportRange) {
+    const params = new URLSearchParams({ from: range.from, to: range.to });
+    const data = await api(`/api/reports/accesses?${params.toString()}`);
+    setAccessReport(data);
+  }
 
   async function loadData() {
     setError('');
@@ -681,6 +759,7 @@ function App() {
       setDashboard(dashboardData);
       setHistory(historyData.history || []);
       setReports(reportData.reports || {});
+      await loadAccessReport();
     } catch (err) {
       setError(err.message);
     }
@@ -706,9 +785,20 @@ function App() {
     if (active === 'salas') return <RoomsModule rooms={dashboard.rooms} onSaved={loadData} />;
     if (active === 'qr') return <QrModule />;
     if (active === 'historial') return <HistoryModule history={filteredHistory} searchQuery={searchQuery} onSearch={setSearchQuery} />;
-    if (active === 'reportes') return <ReportsModule data={dashboard} reports={reports} />;
+    if (active === 'reportes') {
+      return (
+        <ReportsModule
+          data={dashboard}
+          reports={reports}
+          accessReport={accessReport}
+          reportRange={reportRange}
+          onRangeChange={setReportRange}
+          onRefreshReport={() => loadAccessReport(reportRange)}
+        />
+      );
+    }
     return <Dashboard data={filteredDashboard} />;
-  }, [active, dashboard, history, reports, user, searchQuery]);
+  }, [active, dashboard, history, reports, user, searchQuery, accessReport, reportRange]);
 
   if (!user) return <Login onLogin={setUser} />;
 

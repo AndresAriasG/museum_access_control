@@ -436,6 +436,96 @@ app.get("/api/reports", requireDb, async (_req, res) => {
   }
 });
 
+app.get("/api/reports/accesses", requireDb, async (req, res) => {
+  const { from, to } = req.query;
+  const fromDate = from || new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const toDate = to || new Date().toISOString().slice(0, 10);
+  const params = [fromDate, toDate];
+  const rangeWhere = "ae.entered_at::date BETWEEN $1::date AND $2::date";
+
+  try {
+    const [summary, accesses, byCountry, byCity, byRoom] = await Promise.all([
+      pool.query(
+        `SELECT
+           COUNT(*)::int AS total_entries,
+           COUNT(DISTINCT ae.visitor_id)::int AS unique_visitors,
+           COUNT(*) FILTER (WHERE ae.ticket_id IS NOT NULL)::int AS qr_entries,
+           COUNT(DISTINCT NULLIF(v.country, ''))::int AS countries_count,
+           COUNT(DISTINCT NULLIF(v.city, ''))::int AS cities_count
+         FROM museum_access_entries ae
+         JOIN museum_visitors v ON v.id = ae.visitor_id
+         WHERE ${rangeWhere}`,
+        params
+      ),
+      pool.query(
+        `SELECT ae.id,
+                v.full_name,
+                v.visitor_type,
+                v.country,
+                v.city,
+                COALESCE(r.name, 'Sin sala') AS room,
+                to_char(ae.entered_at, 'YYYY-MM-DD HH24:MI') AS entered_at,
+                ae.status,
+                t.ticket_code,
+                u.username AS validated_by
+         FROM museum_access_entries ae
+         JOIN museum_visitors v ON v.id = ae.visitor_id
+         LEFT JOIN museum_rooms r ON r.id = ae.room_id
+         LEFT JOIN museum_qr_tickets t ON t.id = ae.ticket_id
+         LEFT JOIN museum_auth_users u ON u.id = ae.validated_by
+         WHERE ${rangeWhere}
+         ORDER BY ae.entered_at DESC
+         LIMIT 500`,
+        params
+      ),
+      pool.query(
+        `SELECT COALESCE(NULLIF(v.country, ''), 'Sin pais') AS label, COUNT(*)::int AS value
+         FROM museum_access_entries ae
+         JOIN museum_visitors v ON v.id = ae.visitor_id
+         WHERE ${rangeWhere}
+         GROUP BY label
+         ORDER BY value DESC
+         LIMIT 8`,
+        params
+      ),
+      pool.query(
+        `SELECT COALESCE(NULLIF(v.city, ''), 'Sin ciudad') AS label, COUNT(*)::int AS value
+         FROM museum_access_entries ae
+         JOIN museum_visitors v ON v.id = ae.visitor_id
+         WHERE ${rangeWhere}
+         GROUP BY label
+         ORDER BY value DESC
+         LIMIT 8`,
+        params
+      ),
+      pool.query(
+        `SELECT COALESCE(r.name, 'Sin sala') AS label, COUNT(*)::int AS value
+         FROM museum_access_entries ae
+         LEFT JOIN museum_rooms r ON r.id = ae.room_id
+         WHERE ${rangeWhere}
+         GROUP BY label
+         ORDER BY value DESC
+         LIMIT 8`,
+        params
+      )
+    ]);
+
+    res.json({
+      range: { from: fromDate, to: toDate },
+      summary: summary.rows[0],
+      accesses: accesses.rows,
+      rankings: {
+        countries: byCountry.rows,
+        cities: byCity.rows,
+        rooms: byRoom.rows
+      }
+    });
+  } catch (error) {
+    console.error("Access report query failed:", error);
+    res.status(500).json({ error: "No se pudo cargar el reporte de accesos" });
+  }
+});
+
 app.use(express.static(distPath));
 
 app.get("*", (_req, res) => {
