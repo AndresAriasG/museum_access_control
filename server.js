@@ -207,9 +207,13 @@ app.get("/api/dashboard", requireDb, async (_req, res) => {
 
 app.post("/api/entries", requireDb, async (req, res) => {
   const { fullName, documentNumber, visitorType, email, country, city, roomId, validatedBy } = req.body;
+  const requiredFields = { fullName, documentNumber, visitorType, email, country, city, roomId };
+  const missingFields = Object.entries(requiredFields)
+    .filter(([, value]) => !String(value || "").trim())
+    .map(([key]) => key);
 
-  if (!fullName || !roomId) {
-    return res.status(400).json({ error: "Nombre y sala son obligatorios" });
+  if (missingFields.length > 0) {
+    return res.status(400).json({ error: "Todos los campos del registro son obligatorios" });
   }
 
   const client = await pool.connect();
@@ -222,12 +226,12 @@ app.post("/api/entries", requireDb, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, full_name, visitor_type, country, city`,
       [
-        fullName,
-        documentNumber || null,
-        visitorType || "General",
-        email || null,
-        country || null,
-        city || null
+        fullName.trim(),
+        documentNumber.trim(),
+        visitorType.trim(),
+        email.trim(),
+        country.trim(),
+        city.trim()
       ]
     );
 

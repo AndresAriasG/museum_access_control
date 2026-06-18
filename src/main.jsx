@@ -328,20 +328,20 @@ function EntryModule({ rooms, user, onSaved }) {
           </div>
         </div>
         <form className="stack-form" onSubmit={submit}>
-          <input placeholder="Nombre completo" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} />
-          <select value={form.visitorType} onChange={(event) => setForm({ ...form, visitorType: event.target.value })}>
+          <input required placeholder="Nombre completo" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} />
+          <select required value={form.visitorType} onChange={(event) => setForm({ ...form, visitorType: event.target.value })}>
             <option>General</option>
             <option>VIP</option>
             <option>Estudiante</option>
             <option>Grupo</option>
           </select>
-          <input placeholder="Documento / ID" value={form.documentNumber} onChange={(event) => setForm({ ...form, documentNumber: event.target.value })} />
-          <input placeholder="Email opcional" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+          <input required placeholder="Documento / ID" value={form.documentNumber} onChange={(event) => setForm({ ...form, documentNumber: event.target.value })} />
+          <input required type="email" placeholder="Email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
           <div className="form-grid">
-            <input placeholder="Pais" value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value })} />
-            <input placeholder="Ciudad" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
+            <input required placeholder="Pais" value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value })} />
+            <input required placeholder="Ciudad" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
           </div>
-          <select value={form.roomId} onChange={(event) => setForm({ ...form, roomId: event.target.value })}>
+          <select required value={form.roomId} onChange={(event) => setForm({ ...form, roomId: event.target.value })}>
             {rooms.map((room) => <option value={room.id} key={room.id}>{room.name}</option>)}
           </select>
           {message && <p className="form-message">{message}</p>}
