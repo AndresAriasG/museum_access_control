@@ -47,6 +47,19 @@ CREATE INDEX IF NOT EXISTS idx_museum_visitors_phone
   ON museum_visitors (phone);
 ```
 
+Para agregar las experiencias iniciales en una base existente:
+
+```sql
+INSERT INTO museum_rooms (name, capacity, is_active)
+VALUES
+  ('Recorridos', 80, true),
+  ('Eventos', 120, true),
+  ('Fotografia del Zocalo', 50, true),
+  ('Sala ludica', 60, true)
+ON CONFLICT (name) DO UPDATE
+SET is_active = true;
+```
+
 ## Usuario inicial
 
 ```text

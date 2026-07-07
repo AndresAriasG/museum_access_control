@@ -308,12 +308,23 @@ select,
   color: #061014;
 }
 
+.compact-btn {
+  min-height: 38px;
+  padding: 0 14px;
+}
+
 .ghost-btn {
   min-height: 38px;
   border-radius: 10px;
   padding: 0 14px;
   background: var(--soft-strong);
   border: 1px solid var(--line);
+}
+
+.danger-btn {
+  color: var(--rose);
+  border-color: rgba(194, 65, 93, 0.22);
+  background: rgba(194, 65, 93, 0.08);
 }
 
 .icon-btn {
@@ -723,7 +734,7 @@ select,
   background: var(--soft);
 }
 
-.room-admin-row div {
+.room-admin-row > div:first-child {
   display: grid;
   gap: 4px;
 }
@@ -731,6 +742,25 @@ select,
 .room-admin-row span {
   color: var(--muted);
   font-size: 0.86rem;
+}
+
+.room-admin-row.editing {
+  align-items: end;
+}
+
+.room-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(110px, 150px);
+  gap: 10px;
+  flex: 1;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .generated-qr-card,
@@ -1162,6 +1192,20 @@ mark {
 
   .room-row {
     grid-template-columns: 1fr;
+  }
+
+  .room-admin-row,
+  .room-admin-row.editing {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .room-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .row-actions {
+    justify-content: flex-start;
   }
 
   .insight-grid {

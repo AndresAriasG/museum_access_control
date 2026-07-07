@@ -37,7 +37,7 @@ const X = (props) => <Icon {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'entrada', label: 'Registrar Entrada', icon: DoorOpen },
-  { id: 'salas', label: 'Salas', icon: Gauge },
+  { id: 'salas', label: 'Experiencias', icon: Gauge },
   { id: 'qr', label: 'QR generados', icon: QrCode },
   { id: 'historial', label: 'Historial', icon: History },
   { id: 'reportes', label: 'Reportes', icon: BarChart3 }
@@ -76,7 +76,7 @@ function matchesSearch(item, query) {
 }
 
 function exportCsv(rows) {
-  const headers = ['Nombre', 'Tipo', 'Telefono', 'Sala', 'Fecha/Hora', 'Estado', 'QR', 'Ciudad', 'Pais', 'Validado por'];
+  const headers = ['Nombre', 'Tipo', 'Telefono', 'Experiencia', 'Fecha/Hora', 'Estado', 'QR', 'Ciudad', 'Pais', 'Validado por'];
   const escape = (value) => `"${String(value || '').replace(/"/g, '""')}"`;
   const csv = [
     headers.join(','),
@@ -323,7 +323,7 @@ function Header({
         <form className="search-form" onSubmit={onSearchSubmit}>
           <div className="search-box">
             <Search size={17} />
-            <input value={searchDraft} onChange={(event) => onSearchDraft(event.target.value)} placeholder="Buscar visitante, sala o QR" />
+            <input value={searchDraft} onChange={(event) => onSearchDraft(event.target.value)} placeholder="Buscar visitante, experiencia o QR" />
           </div>
           <button className="ghost-btn search-action" type="submit">Buscar</button>
           {searchQuery && <button className="ghost-btn search-action" type="button" onClick={onClearSearch}>Limpiar</button>}
@@ -380,7 +380,7 @@ function Dashboard({ data }) {
     { label: 'Visitantes hoy', value: data.kpis.visitorsToday, delta: 'Actualizado', icon: UsersRound, tone: 'cyan' },
     { label: 'QR validados hoy', value: data.kpis.qrValidationsToday, delta: 'Tickets usados', icon: TicketCheck, tone: 'green' },
     { label: 'Visitantes dentro', value: data.kpis.visitorsInside, delta: `${data.kpis.totalCapacity} capacidad`, icon: Gauge, tone: 'amber' },
-    { label: 'Salas activas', value: data.rooms.length, delta: 'Operativas', icon: ShieldCheck, tone: 'rose' }
+    { label: 'Experiencias activas', value: data.rooms.length, delta: 'Operativas', icon: ShieldCheck, tone: 'rose' }
   ];
   const max = Math.max(...data.hourly.map((item) => Number(item.value)), 1);
   const weeklyMax = Math.max(...data.weekly.map((item) => Number(item.value)), 1);
@@ -404,7 +404,7 @@ function Dashboard({ data }) {
         <div className="panel-head">
           <div>
             <p className="eyebrow">Estado operacional</p>
-            <h3>Salas activas</h3>
+            <h3>Experiencias activas</h3>
           </div>
         </div>
         <div className="room-list">
@@ -525,7 +525,7 @@ function EntryModule({ rooms, user, onSaved }) {
           </div>
         </div>
         <form className="stack-form" onSubmit={submit}>
-          {rooms.length === 0 && <p className="form-message error">Primero registra una sala en el modulo Salas.</p>}
+          {rooms.length === 0 && <p className="form-message error">Primero registra una experiencia en el modulo Experiencias.</p>}
           <input
             required
             pattern="[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+"
@@ -556,7 +556,7 @@ function EntryModule({ rooms, user, onSaved }) {
             <input required placeholder="Ciudad" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
           </div>
           <select required value={form.roomId} onChange={(event) => setForm({ ...form, roomId: event.target.value })}>
-            <option value="" disabled>Selecciona una sala</option>
+            <option value="" disabled>Selecciona una experiencia</option>
             {rooms.map((room) => <option value={room.id} key={room.id}>{room.name}</option>)}
           </select>
           {message && <p className="form-message">{message}</p>}
@@ -577,7 +577,7 @@ function EntryModule({ rooms, user, onSaved }) {
         <CalendarDays size={34} />
         <h3>Turno actual</h3>
         <p>Control de capacidad, horario de visita y trazabilidad de entrada en una sola operacion.</p>
-        <div className="metric-line"><span>Salas disponibles</span><strong>{rooms.length}</strong></div>
+        <div className="metric-line"><span>Experiencias disponibles</span><strong>{rooms.length}</strong></div>
         <div className="metric-line"><span>Operador</span><strong>{user?.first_name || 'Activo'}</strong></div>
       </div>
     </section>
@@ -586,8 +586,11 @@ function EntryModule({ rooms, user, onSaved }) {
 
 function RoomsModule({ rooms, onSaved }) {
   const [form, setForm] = useState({ name: '', capacity: '' });
+  const [editingId, setEditingId] = useState('');
+  const [editForm, setEditForm] = useState({ name: '', capacity: '' });
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState('');
 
   async function submit(event) {
     event.preventDefault();
@@ -598,7 +601,7 @@ function RoomsModule({ rooms, onSaved }) {
         method: 'POST',
         body: JSON.stringify({ name: form.name, capacity: Number(form.capacity) })
       });
-      setMessage(`Sala guardada: ${data.room.name}`);
+      setMessage(`Experiencia guardada: ${data.room.name}`);
       setForm({ name: '', capacity: '' });
       onSaved();
     } catch (err) {
@@ -608,22 +611,69 @@ function RoomsModule({ rooms, onSaved }) {
     }
   }
 
+  function startEdit(room) {
+    setEditingId(room.id);
+    setEditForm({ name: room.name, capacity: String(room.capacity) });
+    setMessage('');
+  }
+
+  function cancelEdit() {
+    setEditingId('');
+    setEditForm({ name: '', capacity: '' });
+  }
+
+  async function updateRoom(event, roomId) {
+    event.preventDefault();
+    setBusyId(roomId);
+    setMessage('');
+    try {
+      const data = await api(`/api/rooms/${roomId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: editForm.name, capacity: Number(editForm.capacity) })
+      });
+      setMessage(`Experiencia actualizada: ${data.room.name}`);
+      cancelEdit();
+      onSaved();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function deleteRoom(room) {
+    const confirmed = window.confirm(`Eliminar "${room.name}" de las experiencias disponibles?`);
+    if (!confirmed) return;
+    setBusyId(room.id);
+    setMessage('');
+    try {
+      await api(`/api/rooms/${room.id}`, { method: 'DELETE' });
+      setMessage(`Experiencia eliminada: ${room.name}`);
+      if (editingId === room.id) cancelEdit();
+      onSaved();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusyId('');
+    }
+  }
+
   return (
     <section className="module-layout">
       <div className="panel glass">
         <div className="panel-head">
           <div>
             <p className="eyebrow">Administracion</p>
-            <h3>Registrar Sala</h3>
+            <h3>Registrar experiencia</h3>
           </div>
         </div>
         <form className="stack-form" onSubmit={submit}>
-          <input required placeholder="Nombre de la sala" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          <input required placeholder="Nombre de la experiencia" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
           <input required min="1" type="number" placeholder="Capacidad" value={form.capacity} onChange={(event) => setForm({ ...form, capacity: event.target.value })} />
           {message && <p className="form-message">{message}</p>}
           <button className="primary-btn" type="submit" disabled={loading}>
             <CheckCircle2 size={18} />
-            {loading ? 'Guardando...' : 'Guardar sala'}
+            {loading ? 'Guardando...' : 'Guardar experiencia'}
           </button>
         </form>
       </div>
@@ -631,19 +681,36 @@ function RoomsModule({ rooms, onSaved }) {
         <div className="panel-head">
           <div>
             <p className="eyebrow">Disponibles</p>
-            <h3>Salas registradas</h3>
+            <h3>Experiencias registradas</h3>
           </div>
         </div>
         <div className="room-admin-list">
-          {rooms.length === 0 && <p className="empty-state">No hay salas registradas todavia.</p>}
+          {rooms.length === 0 && <p className="empty-state">No hay experiencias registradas todavia.</p>}
           {rooms.map((room) => (
-            <div className="room-admin-row" key={room.id}>
-              <div>
-                <strong>{room.name}</strong>
-                <span>Capacidad {room.capacity}</span>
+            editingId === room.id ? (
+              <form className="room-admin-row editing" key={room.id} onSubmit={(event) => updateRoom(event, room.id)}>
+                <div className="room-edit-grid">
+                  <input required value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} />
+                  <input required min="1" type="number" value={editForm.capacity} onChange={(event) => setEditForm({ ...editForm, capacity: event.target.value })} />
+                </div>
+                <div className="row-actions">
+                  <button className="ghost-btn" type="button" onClick={cancelEdit}>Cancelar</button>
+                  <button className="primary-btn compact-btn" type="submit" disabled={busyId === room.id}>Guardar</button>
+                </div>
+              </form>
+            ) : (
+              <div className="room-admin-row" key={room.id}>
+                <div>
+                  <strong>{room.name}</strong>
+                  <span>Capacidad {room.capacity}</span>
+                </div>
+                <div className="row-actions">
+                  <mark>Activa</mark>
+                  <button className="ghost-btn" type="button" onClick={() => startEdit(room)}>Editar</button>
+                  <button className="ghost-btn danger-btn" type="button" disabled={busyId === room.id} onClick={() => deleteRoom(room)}>Eliminar</button>
+                </div>
               </div>
-              <mark>Activa</mark>
-            </div>
+            )
           ))}
         </div>
       </div>
@@ -692,7 +759,7 @@ function HistoryModule({ history, searchQuery, searchDraft, onSearchDraft, onSea
       <form className="history-toolbar" onSubmit={onSearchSubmit}>
         <div className="search-box history-search">
           <Search size={17} />
-          <input value={searchDraft} onChange={(event) => onSearchDraft(event.target.value)} placeholder="Buscar por nombre, telefono, QR, sala, ciudad, pais o estado" />
+          <input value={searchDraft} onChange={(event) => onSearchDraft(event.target.value)} placeholder="Buscar por nombre, telefono, QR, experiencia, ciudad, pais o estado" />
         </div>
         <button className="ghost-btn" type="submit">Buscar</button>
         {searchQuery && <button className="ghost-btn" type="button" onClick={onClearSearch}>Limpiar</button>}
@@ -739,7 +806,7 @@ function RankingList({ title, items }) {
 function ReportsModule({ data, reports, accessReport, reportRange, onRangeChange, onRefreshReport }) {
   const cards = [
     { label: 'Pico de acceso', value: data.reports.peakAccess, icon: Clock3 },
-    { label: 'Sala mas visitada', value: data.reports.topRoom, icon: AreaChart },
+    { label: 'Experiencia mas visitada', value: data.reports.topRoom, icon: AreaChart },
     { label: 'Origen principal', value: data.reports.topOrigin, icon: UsersRound }
   ];
   const summary = accessReport.summary || {};
@@ -799,7 +866,7 @@ function ReportsModule({ data, reports, accessReport, reportRange, onRangeChange
         <div className="ranking-grid">
           <RankingList title="Top paises" items={accessReport.rankings?.countries || []} />
           <RankingList title="Top ciudades" items={accessReport.rankings?.cities || []} />
-          <RankingList title="Top salas" items={accessReport.rankings?.rooms || []} />
+          <RankingList title="Top experiencias" items={accessReport.rankings?.rooms || []} />
         </div>
         <div className="table report-table">
           {(accessReport.accesses || []).length === 0 && <p className="empty-state">No hay accesos en el rango seleccionado.</p>}
@@ -914,7 +981,7 @@ function App() {
   const notifications = useMemo(() => {
     const items = [];
     if (dashboard.rooms.length === 0) {
-      items.push({ title: 'Sin salas registradas', body: 'Crea al menos una sala para registrar entradas.' });
+      items.push({ title: 'Sin experiencias registradas', body: 'Crea al menos una experiencia para registrar entradas.' });
     }
     if (dashboard.kpis.visitorsInside > 0) {
       items.push({ title: 'Visitantes dentro', body: `${dashboard.kpis.visitorsInside} visitante(s) permanecen en el museo.` });

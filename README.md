@@ -43,6 +43,8 @@ museum2026
 - `GET /api/dashboard`
 - `GET /api/rooms`
 - `POST /api/rooms`
+- `PUT /api/rooms/:id`
+- `DELETE /api/rooms/:id`
 - `POST /api/entries`
 - `GET /api/history`
 - `GET /api/reports`
@@ -50,9 +52,9 @@ museum2026
 - `POST /api/access-users/init`
 
 Los visitantes guardan telefono, pais y ciudad en `museum_visitors.phone`, `museum_visitors.country` y `museum_visitors.city`.
-Las salas se administran desde el modulo `Salas` y se guardan en `museum_rooms`.
-La busqueda global se aplica con boton `Buscar` y filtra visitantes, salas, QR, ciudad, pais, tipo, fecha y estado.
-La campana muestra alertas operativas como salas pendientes o visitantes dentro.
+Las experiencias se administran desde el modulo `Experiencias` y se guardan en `museum_rooms`.
+La busqueda global se aplica con boton `Buscar` y filtra visitantes, experiencias, QR, ciudad, pais, tipo, fecha y estado.
+La campana muestra alertas operativas como experiencias pendientes o visitantes dentro.
 El modulo `Historial` tiene una busqueda propia visible y permite exportar los ingresos filtrados a CSV.
 El modulo `Reportes` permite filtrar accesos por rango de fechas, ver rankings y exportar CSV.
 El dashboard muestra primero ingresos por dia y debajo el detalle por hora con etiquetas visibles.

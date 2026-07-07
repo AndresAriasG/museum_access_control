@@ -9,10 +9,10 @@ ON CONFLICT (username) DO NOTHING;
 
 INSERT INTO museum_rooms (name, capacity)
 VALUES
-  ('Arte Moderno', 180),
-  ('Galeria Colonial', 140),
-  ('Ciencias Naturales', 120),
-  ('Auditorio', 260)
+  ('Recorridos', 80),
+  ('Eventos', 120),
+  ('Fotografia del Zocalo', 50),
+  ('Sala ludica', 60)
 ON CONFLICT (name) DO NOTHING;
 
 WITH visitor_seed AS (

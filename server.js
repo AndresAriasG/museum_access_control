@@ -94,7 +94,7 @@ app.get("/api/rooms", requireDb, async (_req, res) => {
     res.json({ rooms: result.rows });
   } catch (error) {
     console.error("Rooms query failed:", error);
-    res.status(500).json({ error: "No se pudieron cargar las salas" });
+    res.status(500).json({ error: "No se pudieron cargar las experiencias" });
   }
 });
 
@@ -121,7 +121,63 @@ app.post("/api/rooms", requireDb, async (req, res) => {
     res.status(201).json({ room: result.rows[0] });
   } catch (error) {
     console.error("Room creation failed:", error);
-    res.status(500).json({ error: "No se pudo guardar la sala" });
+    res.status(500).json({ error: "No se pudo guardar la experiencia" });
+  }
+});
+
+app.put("/api/rooms/:id", requireDb, async (req, res) => {
+  const { id } = req.params;
+  const { name, capacity } = req.body;
+  const cleanName = String(name || "").trim();
+  const parsedCapacity = Number(capacity);
+
+  if (!cleanName || !Number.isInteger(parsedCapacity) || parsedCapacity <= 0) {
+    return res.status(400).json({ error: "Nombre y capacidad valida son obligatorios" });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE museum_rooms
+       SET name = $1,
+           capacity = $2,
+           is_active = true
+       WHERE id = $3
+       RETURNING id, name, capacity, is_active`,
+      [cleanName, parsedCapacity, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Experiencia no encontrada" });
+    }
+
+    res.json({ room: result.rows[0] });
+  } catch (error) {
+    if (error.code === "23505") {
+      return res.status(409).json({ error: "Ya existe una experiencia con ese nombre" });
+    }
+    console.error("Room update failed:", error);
+    res.status(500).json({ error: "No se pudo actualizar la experiencia" });
+  }
+});
+
+app.delete("/api/rooms/:id", requireDb, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE museum_rooms
+       SET is_active = false
+       WHERE id = $1
+       RETURNING id, name, capacity, is_active`,
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Experiencia no encontrada" });
+    }
+
+    res.json({ room: result.rows[0] });
+  } catch (error) {
+    console.error("Room delete failed:", error);
+    res.status(500).json({ error: "No se pudo eliminar la experiencia" });
   }
 });
 
@@ -177,7 +233,7 @@ app.get("/api/dashboard", requireDb, async (req, res) => {
                 v.phone,
                 v.country,
                 v.city,
-                COALESCE(r.name, 'Sin sala') AS room,
+                COALESCE(r.name, 'Sin experiencia') AS room,
                 to_char(ae.entered_at, 'HH24:MI') AS time,
                 ae.status
          FROM museum_access_entries ae
@@ -393,7 +449,7 @@ app.get("/api/history", requireDb, async (req, res) => {
               v.phone,
               v.country,
               v.city,
-              COALESCE(r.name, 'Sin sala') AS room,
+              COALESCE(r.name, 'Sin experiencia') AS room,
               to_char(ae.entered_at, 'YYYY-MM-DD HH24:MI') AS entered_at,
               ae.status,
               t.id AS ticket_id,
@@ -476,7 +532,7 @@ app.get("/api/reports/accesses", requireDb, async (req, res) => {
                 v.phone,
                 v.country,
                 v.city,
-                COALESCE(r.name, 'Sin sala') AS room,
+                COALESCE(r.name, 'Sin experiencia') AS room,
                 to_char(ae.entered_at, 'YYYY-MM-DD HH24:MI') AS entered_at,
                 ae.status,
                 t.id AS ticket_id,
@@ -513,7 +569,7 @@ app.get("/api/reports/accesses", requireDb, async (req, res) => {
         params
       ),
       pool.query(
-        `SELECT COALESCE(r.name, 'Sin sala') AS label, COUNT(*)::int AS value
+        `SELECT COALESCE(r.name, 'Sin experiencia') AS label, COUNT(*)::int AS value
          FROM museum_access_entries ae
          LEFT JOIN museum_rooms r ON r.id = ae.room_id
          WHERE ${rangeWhere}
