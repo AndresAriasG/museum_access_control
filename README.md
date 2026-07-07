@@ -49,7 +49,7 @@ museum2026
 - `GET /api/reports/accesses`
 - `POST /api/access-users/init`
 
-Los visitantes guardan pais y ciudad en `museum_visitors.country` y `museum_visitors.city`.
+Los visitantes guardan telefono, pais y ciudad en `museum_visitors.phone`, `museum_visitors.country` y `museum_visitors.city`.
 Las salas se administran desde el modulo `Salas` y se guardan en `museum_rooms`.
 La busqueda global se aplica con boton `Buscar` y filtra visitantes, salas, QR, ciudad, pais, tipo, fecha y estado.
 La campana muestra alertas operativas como salas pendientes o visitantes dentro.
@@ -57,7 +57,7 @@ El modulo `Historial` tiene una busqueda propia visible y permite exportar los i
 El modulo `Reportes` permite filtrar accesos por rango de fechas, ver rankings y exportar CSV.
 El dashboard muestra primero ingresos por dia y debajo el detalle por hora con etiquetas visibles.
 El registro valida que el nombre tenga solo letras y que el email tenga formato de correo.
-Cada registro de entrada genera un QR por persona, relacionado con `ticketId`, `ticketCode` y `entryId`; el modulo `QR generados` permite imprimir los ultimos codigos emitidos.
+Cada registro de entrada genera un QR por persona, relacionado con `ticketId`, `ticketCode` y `entryId`; el modulo `QR generados` muestra una lista por visitante y permite imprimir los ultimos codigos emitidos.
 
 ## Railway
 

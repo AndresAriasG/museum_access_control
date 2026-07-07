@@ -174,6 +174,7 @@ app.get("/api/dashboard", requireDb, async (req, res) => {
         `SELECT ae.id,
                 v.full_name,
                 v.visitor_type,
+                v.phone,
                 v.country,
                 v.city,
                 COALESCE(r.name, 'Sin sala') AS room,
@@ -186,6 +187,7 @@ app.get("/api/dashboard", requireDb, async (req, res) => {
          WHERE ($1 = ''
            OR v.full_name ILIKE $2
            OR v.visitor_type ILIKE $2
+           OR v.phone ILIKE $2
            OR v.country ILIKE $2
            OR v.city ILIKE $2
            OR r.name ILIKE $2
@@ -265,10 +267,11 @@ app.get("/api/dashboard", requireDb, async (req, res) => {
 });
 
 app.post("/api/entries", requireDb, async (req, res) => {
-  const { fullName, documentNumber, visitorType, email, country, city, roomId, validatedBy } = req.body;
+  const { fullName, documentNumber, visitorType, email, phone, country, city, roomId, validatedBy } = req.body;
   const cleanName = String(fullName || "").trim();
   const cleanEmail = String(email || "").trim();
-  const requiredFields = { fullName, documentNumber, visitorType, email, country, city, roomId };
+  const cleanPhone = String(phone || "").trim();
+  const requiredFields = { fullName, documentNumber, visitorType, email, phone, country, city, roomId };
   const missingFields = Object.entries(requiredFields)
     .filter(([, value]) => !String(value || "").trim())
     .map(([key]) => key);
@@ -285,20 +288,25 @@ app.post("/api/entries", requireDb, async (req, res) => {
     return res.status(400).json({ error: "El email debe tener un formato valido" });
   }
 
+  if (!/^[0-9+\s()-]{7,20}$/.test(cleanPhone)) {
+    return res.status(400).json({ error: "El telefono debe tener un formato valido" });
+  }
+
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
     const visitor = await client.query(
-      `INSERT INTO museum_visitors (full_name, document_number, visitor_type, email, country, city)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, full_name, visitor_type, country, city`,
+      `INSERT INTO museum_visitors (full_name, document_number, visitor_type, email, phone, country, city)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, full_name, visitor_type, phone, country, city`,
       [
         cleanName,
         documentNumber.trim(),
         visitorType.trim(),
         cleanEmail,
+        cleanPhone,
         country.trim(),
         city.trim()
       ]
@@ -350,6 +358,7 @@ app.post("/api/qr/validate", requireDb, async (req, res) => {
               t.signature,
               v.full_name,
               v.visitor_type,
+              v.phone,
               v.country,
               v.city
        FROM museum_qr_tickets t
@@ -381,6 +390,7 @@ app.get("/api/history", requireDb, async (req, res) => {
       `SELECT ae.id,
               v.full_name,
               v.visitor_type,
+              v.phone,
               v.country,
               v.city,
               COALESCE(r.name, 'Sin sala') AS room,
@@ -397,6 +407,7 @@ app.get("/api/history", requireDb, async (req, res) => {
        WHERE ($1 = ''
          OR v.full_name ILIKE $2
          OR v.visitor_type ILIKE $2
+         OR v.phone ILIKE $2
          OR v.country ILIKE $2
          OR v.city ILIKE $2
          OR r.name ILIKE $2
@@ -462,6 +473,7 @@ app.get("/api/reports/accesses", requireDb, async (req, res) => {
         `SELECT ae.id,
                 v.full_name,
                 v.visitor_type,
+                v.phone,
                 v.country,
                 v.city,
                 COALESCE(r.name, 'Sin sala') AS room,

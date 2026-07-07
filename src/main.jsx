@@ -17,7 +17,6 @@ const CalendarDays = (props) => <Icon {...props}><path d="M7 2v4" /><path d="M17
 const CheckCircle2 = (props) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" /></Icon>;
 const ChevronRight = (props) => <Icon {...props}><path d="m9 18 6-6-6-6" /></Icon>;
 const Clock3 = (props) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Icon>;
-const Database = (props) => <Icon {...props}><ellipse cx="12" cy="5" rx="7" ry="3" /><path d="M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5" /><path d="M5 12v7c0 1.7 3.1 3 7 3s7-1.3 7-3v-7" /></Icon>;
 const DoorOpen = (props) => <Icon {...props}><path d="M14 3h5v18h-5" /><path d="M14 21V5L6 3v18l8-2" /><path d="M11 12h.01" /></Icon>;
 const Fingerprint = (props) => <Icon {...props}><path d="M7 10a5 5 0 0 1 10 0" /><path d="M6 14a6 6 0 0 1 12 0" /><path d="M8 18a4 4 0 0 0 8 0v-4a4 4 0 0 0-8 0v2" /><path d="M12 14v5" /></Icon>;
 const Gauge = (props) => <Icon {...props}><path d="M4 14a8 8 0 0 1 16 0" /><path d="M12 14l4-5" /><path d="M6 20h12" /></Icon>;
@@ -27,7 +26,7 @@ const LockKeyhole = (props) => <Icon {...props}><rect x="4" y="10" width="16" he
 const LogIn = (props) => <Icon {...props}><path d="M14 3h5v18h-5" /><path d="M10 17l5-5-5-5" /><path d="M15 12H3" /></Icon>;
 const Menu = (props) => <Icon {...props}><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></Icon>;
 const QrCode = (props) => <Icon {...props}><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><path d="M14 14h3v3h-3z" /><path d="M21 14v7h-4" /></Icon>;
-const Railway = (props) => <Icon {...props}><path d="M4 17 12 3l8 14" /><path d="M7 17h10" /><path d="M9 21h6" /></Icon>;
+const Signal = (props) => <Icon {...props}><path d="M4 17 12 3l8 14" /><path d="M7 17h10" /><path d="M9 21h6" /></Icon>;
 const Search = (props) => <Icon {...props}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Icon>;
 const ShieldCheck = (props) => <Icon {...props}><path d="M12 3 20 6v6c0 5-3.4 8.5-8 9-4.6-.5-8-4-8-9V6l8-3Z" /><path d="m8.5 12 2.2 2.2L16 9" /></Icon>;
 const TicketCheck = (props) => <Icon {...props}><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4V7Z" /><path d="m9 12 2 2 4-4" /></Icon>;
@@ -65,6 +64,7 @@ function matchesSearch(item, query) {
   return [
     item.full_name,
     item.visitor_type,
+    item.phone,
     item.room,
     item.ticket_code,
     item.country,
@@ -76,13 +76,14 @@ function matchesSearch(item, query) {
 }
 
 function exportCsv(rows) {
-  const headers = ['Nombre', 'Tipo', 'Sala', 'Fecha/Hora', 'Estado', 'QR', 'Ciudad', 'Pais', 'Validado por'];
+  const headers = ['Nombre', 'Tipo', 'Telefono', 'Sala', 'Fecha/Hora', 'Estado', 'QR', 'Ciudad', 'Pais', 'Validado por'];
   const escape = (value) => `"${String(value || '').replace(/"/g, '""')}"`;
   const csv = [
     headers.join(','),
     ...rows.map((row) => [
       row.full_name,
       row.visitor_type,
+      row.phone,
       row.room,
       row.entered_at || row.time,
       row.status,
@@ -109,6 +110,7 @@ function qrPayload(ticket) {
     ticketCode: ticket.code || ticket.ticket_code,
     entryId: ticket.entryId || ticket.entry_id,
     visitor: ticket.visitor || ticket.full_name,
+    phone: ticket.phone,
     issuedAt: ticket.entered_at || ticket.issuedAt
   });
 }
@@ -116,6 +118,7 @@ function qrPayload(ticket) {
 async function printQr(ticket) {
   const code = ticket.code || ticket.ticket_code;
   const visitor = ticket.visitor || ticket.full_name || 'Visitante';
+  const phone = ticket.phone || '';
   const payload = qrPayload(ticket);
   const qrSrc = await QRCode.toDataURL(payload, {
     width: 260,
@@ -143,6 +146,7 @@ async function printQr(ticket) {
           <img src="${qrSrc}" alt="QR ${code}" />
           <strong>${code}</strong>
           <p>${visitor}</p>
+          <p>${phone}</p>
           <p>${ticket.room || ''}</p>
         </main>
         <script>window.onload = () => { window.print(); window.close(); };</script>
@@ -253,7 +257,7 @@ function Login({ onLogin }) {
         </form>
         <div className="integration-strip">
           <span><Database size={15} /> Sesion protegida</span>
-          <span><Railway size={15} /> Operacion segura</span>
+          <span><Signal size={15} /> Operacion segura</span>
         </div>
       </div>
     </section>
@@ -359,7 +363,7 @@ function VisitorTable({ visitors = [], wide = false }) {
           <div className="table-row" key={visitor.id}>
             <div>
               <strong>{visitor.full_name}</strong>
-              <span>{visitor.visitor_type} · {[visitor.city, visitor.country].filter(Boolean).join(', ') || 'Sin origen'}</span>
+              <span>{[visitor.visitor_type, visitor.phone, [visitor.city, visitor.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos'}</span>
             </div>
             <span>{visitor.room}</span>
             <span>{visitor.time || visitor.entered_at}</span>
@@ -462,6 +466,7 @@ function EntryModule({ rooms, user, onSaved }) {
     documentNumber: '',
     visitorType: 'General',
     email: '',
+    phone: '',
     country: 'Colombia',
     city: '',
     roomId: rooms[0]?.id || ''
@@ -489,6 +494,7 @@ function EntryModule({ rooms, user, onSaved }) {
         ticketId: data.ticket.id,
         entryId: data.entry.id,
         visitor: data.visitor.full_name,
+        phone: data.visitor.phone,
         issuedAt: data.entry.entered_at
       });
       setForm({
@@ -496,6 +502,7 @@ function EntryModule({ rooms, user, onSaved }) {
         documentNumber: '',
         visitorType: 'General',
         email: '',
+        phone: '',
         country: 'Colombia',
         city: '',
         roomId: rooms[0]?.id || ''
@@ -535,6 +542,15 @@ function EntryModule({ rooms, user, onSaved }) {
           </select>
           <input required placeholder="Documento / ID" value={form.documentNumber} onChange={(event) => setForm({ ...form, documentNumber: event.target.value })} />
           <input required type="email" placeholder="Email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+          <input
+            required
+            type="tel"
+            pattern="[0-9+\s()-]{7,20}"
+            title="Usa entre 7 y 20 caracteres: numeros, espacios, +, guiones o parentesis"
+            placeholder="Telefono"
+            value={form.phone}
+            onChange={(event) => setForm({ ...form, phone: event.target.value })}
+          />
           <div className="form-grid">
             <input required placeholder="Pais" value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value })} />
             <input required placeholder="Ciudad" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
@@ -646,13 +662,14 @@ function QrModule({ history }) {
         </div>
       </div>
       {tickets.length === 0 && <p className="empty-state">Aun no hay QR generados. Registra una entrada para crear el primero.</p>}
-      <div className="qr-grid">
+      <div className="qr-list">
         {tickets.map((item) => (
-          <article className="qr-card" key={item.id}>
+          <article className="qr-list-row" key={item.id}>
             <QRCodeImage value={qrPayload(item)} label={item.ticket_code} />
-            <div>
+            <div className="qr-list-info">
               <strong>{item.full_name}</strong>
-              <span>{item.room}</span>
+              <span>{[item.phone, item.room].filter(Boolean).join(' · ') || 'Sin datos'}</span>
+              <span>{[item.city, item.country].filter(Boolean).join(', ') || 'Sin origen'}</span>
               <small>{item.entered_at}</small>
             </div>
             <button className="ghost-btn" type="button" onClick={() => printQr(item)}>Imprimir QR</button>
@@ -675,7 +692,7 @@ function HistoryModule({ history, searchQuery, searchDraft, onSearchDraft, onSea
       <form className="history-toolbar" onSubmit={onSearchSubmit}>
         <div className="search-box history-search">
           <Search size={17} />
-          <input value={searchDraft} onChange={(event) => onSearchDraft(event.target.value)} placeholder="Buscar por nombre, QR, sala, ciudad, pais o estado" />
+          <input value={searchDraft} onChange={(event) => onSearchDraft(event.target.value)} placeholder="Buscar por nombre, telefono, QR, sala, ciudad, pais o estado" />
         </div>
         <button className="ghost-btn" type="submit">Buscar</button>
         {searchQuery && <button className="ghost-btn" type="button" onClick={onClearSearch}>Limpiar</button>}
@@ -692,7 +709,7 @@ function HistoryModule({ history, searchQuery, searchDraft, onSearchDraft, onSea
           <div className="table-row history-row" key={item.id}>
             <div>
               <strong>{item.full_name}</strong>
-              <span>{item.ticket_code || 'Sin QR'} · {[item.city, item.country].filter(Boolean).join(', ') || 'Sin origen'}</span>
+              <span>{[item.ticket_code || 'Sin QR', item.phone, [item.city, item.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos'}</span>
             </div>
             <span>{item.room}</span>
             <span>{item.entered_at}</span>
@@ -790,7 +807,7 @@ function ReportsModule({ data, reports, accessReport, reportRange, onRangeChange
             <div className="table-row history-row" key={item.id}>
               <div>
                 <strong>{item.full_name}</strong>
-                <span>{item.ticket_code || 'Sin QR'} · {[item.city, item.country].filter(Boolean).join(', ') || 'Sin origen'}</span>
+                <span>{[item.ticket_code || 'Sin QR', item.phone, [item.city, item.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos'}</span>
               </div>
               <span>{item.room}</span>
               <span>{item.entered_at}</span>
@@ -806,8 +823,8 @@ function ReportsModule({ data, reports, accessReport, reportRange, onRangeChange
 function IntegrationStatus() {
   return (
     <div className="integration-card glass">
-      <span><Database size={16} /> Sesion protegida</span>
-      <span><Railway size={16} /> Operacion activa</span>
+      <span><ShieldCheck size={16} /> Sesion protegida</span>
+      <span><Signal size={16} /> Operacion activa</span>
       <span><ShieldCheck size={16} /> Revision al dia</span>
     </div>
   );

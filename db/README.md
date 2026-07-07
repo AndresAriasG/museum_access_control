@@ -37,6 +37,16 @@ CREATE INDEX IF NOT EXISTS idx_museum_visitors_country_city
   ON museum_visitors (country, city);
 ```
 
+Para capturar telefono en una base existente:
+
+```sql
+ALTER TABLE museum_visitors
+  ADD COLUMN IF NOT EXISTS phone TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_museum_visitors_phone
+  ON museum_visitors (phone);
+```
+
 ## Usuario inicial
 
 ```text
