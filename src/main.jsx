@@ -187,8 +187,8 @@ function QRCodeImage({ value, label }) {
 }
 
 function Login({ onLogin }) {
-  const [username, setUsername] = useState('admin@museo.gov');
-  const [password, setPassword] = useState('museum2026');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -232,14 +232,14 @@ function Login({ onLogin }) {
             Usuario
             <div className="input-wrap">
               <UserRound size={18} />
-              <input type="email" value={username} onChange={(event) => setUsername(event.target.value)} />
+              <input type="email" autoComplete="username" placeholder="usuario@dominio.com" value={username} onChange={(event) => setUsername(event.target.value)} />
             </div>
           </label>
           <label>
             Contrasena
             <div className="input-wrap">
               <LockKeyhole size={18} />
-              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+              <input type="password" autoComplete="current-password" placeholder="Ingresa tu contrasena" value={password} onChange={(event) => setPassword(event.target.value)} />
             </div>
           </label>
           {error && <p className="form-message error">{error}</p>}
