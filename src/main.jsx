@@ -256,7 +256,7 @@ function Login({ onLogin }) {
           </button>
         </form>
         <div className="integration-strip">
-          <span><Database size={15} /> Sesion protegida</span>
+          <span><ShieldCheck size={15} /> Sesion protegida</span>
           <span><Signal size={15} /> Operacion segura</span>
         </div>
       </div>
