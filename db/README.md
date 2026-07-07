@@ -47,7 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_museum_visitors_phone
   ON museum_visitors (phone);
 ```
 
-Para agregar las experiencias iniciales en una base existente:
+Para agregar los servicios iniciales en una base existente:
 
 ```sql
 INSERT INTO museum_rooms (name, capacity, is_active)

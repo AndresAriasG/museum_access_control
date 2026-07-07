@@ -94,7 +94,7 @@ app.get("/api/rooms", requireDb, async (_req, res) => {
     res.json({ rooms: result.rows });
   } catch (error) {
     console.error("Rooms query failed:", error);
-    res.status(500).json({ error: "No se pudieron cargar las experiencias" });
+    res.status(500).json({ error: "No se pudieron cargar los servicios" });
   }
 });
 
@@ -121,7 +121,7 @@ app.post("/api/rooms", requireDb, async (req, res) => {
     res.status(201).json({ room: result.rows[0] });
   } catch (error) {
     console.error("Room creation failed:", error);
-    res.status(500).json({ error: "No se pudo guardar la experiencia" });
+    res.status(500).json({ error: "No se pudo guardar el servicio" });
   }
 });
 
@@ -147,16 +147,16 @@ app.put("/api/rooms/:id", requireDb, async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Experiencia no encontrada" });
+      return res.status(404).json({ error: "Servicio no encontrado" });
     }
 
     res.json({ room: result.rows[0] });
   } catch (error) {
     if (error.code === "23505") {
-      return res.status(409).json({ error: "Ya existe una experiencia con ese nombre" });
+      return res.status(409).json({ error: "Ya existe un servicio con ese nombre" });
     }
     console.error("Room update failed:", error);
-    res.status(500).json({ error: "No se pudo actualizar la experiencia" });
+    res.status(500).json({ error: "No se pudo actualizar el servicio" });
   }
 });
 
@@ -171,13 +171,13 @@ app.delete("/api/rooms/:id", requireDb, async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Experiencia no encontrada" });
+      return res.status(404).json({ error: "Servicio no encontrado" });
     }
 
     res.json({ room: result.rows[0] });
   } catch (error) {
     console.error("Room delete failed:", error);
-    res.status(500).json({ error: "No se pudo eliminar la experiencia" });
+    res.status(500).json({ error: "No se pudo eliminar el servicio" });
   }
 });
 
@@ -233,7 +233,7 @@ app.get("/api/dashboard", requireDb, async (req, res) => {
                 v.phone,
                 v.country,
                 v.city,
-                COALESCE(r.name, 'Sin experiencia') AS room,
+                COALESCE(r.name, 'Sin servicio') AS room,
                 to_char(ae.entered_at, 'HH24:MI') AS time,
                 ae.status
          FROM museum_access_entries ae
@@ -449,7 +449,7 @@ app.get("/api/history", requireDb, async (req, res) => {
               v.phone,
               v.country,
               v.city,
-              COALESCE(r.name, 'Sin experiencia') AS room,
+              COALESCE(r.name, 'Sin servicio') AS room,
               to_char(ae.entered_at, 'YYYY-MM-DD HH24:MI') AS entered_at,
               ae.status,
               t.id AS ticket_id,
@@ -532,7 +532,7 @@ app.get("/api/reports/accesses", requireDb, async (req, res) => {
                 v.phone,
                 v.country,
                 v.city,
-                COALESCE(r.name, 'Sin experiencia') AS room,
+                COALESCE(r.name, 'Sin servicio') AS room,
                 to_char(ae.entered_at, 'YYYY-MM-DD HH24:MI') AS entered_at,
                 ae.status,
                 t.id AS ticket_id,
@@ -569,7 +569,7 @@ app.get("/api/reports/accesses", requireDb, async (req, res) => {
         params
       ),
       pool.query(
-        `SELECT COALESCE(r.name, 'Sin experiencia') AS label, COUNT(*)::int AS value
+        `SELECT COALESCE(r.name, 'Sin servicio') AS label, COUNT(*)::int AS value
          FROM museum_access_entries ae
          LEFT JOIN museum_rooms r ON r.id = ae.room_id
          WHERE ${rangeWhere}
