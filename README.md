@@ -59,7 +59,7 @@ museum2026
 - `POST /api/audit-events`
 - `POST /api/access-users/init`
 
-Los visitantes guardan tipo de documento y documento como datos obligatorios; email, telefono, pais y ciudad son opcionales en `museum_visitors`.
+Los visitantes guardan nombre, tipo de documento, documento y servicio como datos obligatorios; tipo de visitante usa `General` por defecto y email, telefono, pais y ciudad son opcionales en `museum_visitors`.
 Los servicios se administran desde el modulo `Servicios` y se guardan en `museum_rooms`.
 Los usuarios se separan por perfiles en `museum_role_profiles`: `admin` tiene todos los modulos y `registrar` ve Dashboard, Registrar Entrada, Validar QR, QR generados y Reportes.
 El modulo `Auditoria` solo esta disponible para administradores y muestra acciones relevantes hechas por los usuarios.

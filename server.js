@@ -601,16 +601,21 @@ app.post("/api/entries", requireDb, async (req, res) => {
   const cleanEmail = String(email || "").trim();
   const cleanPhone = String(phone || "").trim();
   const cleanDocumentNumber = String(documentNumber || "").trim();
-  const cleanVisitorType = String(visitorType || "").trim();
+  const cleanVisitorType = String(visitorType || "General").trim() || "General";
   const cleanCountry = String(country || "").trim();
   const cleanCity = String(city || "").trim();
-  const requiredFields = { fullName, documentType, documentNumber, visitorType, roomId };
-  const missingFields = Object.entries(requiredFields)
+  const requiredFields = [
+    ["Nombre", cleanName],
+    ["Tipo de documento", cleanDocumentType],
+    ["Documento", cleanDocumentNumber],
+    ["Servicio", roomId]
+  ];
+  const missingFields = requiredFields
     .filter(([, value]) => !String(value || "").trim())
-    .map(([key]) => key);
+    .map(([label]) => label);
 
   if (missingFields.length > 0) {
-    return res.status(400).json({ error: "Todos los campos del registro son obligatorios" });
+    return res.status(400).json({ error: `Faltan campos obligatorios: ${missingFields.join(", ")}` });
   }
 
   if (!/^[\p{L}\s]+$/u.test(cleanName)) {

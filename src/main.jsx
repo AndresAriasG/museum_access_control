@@ -602,7 +602,7 @@ function EntryModule({ rooms, user, onSaved }) {
             value={form.fullName}
             onChange={(event) => setForm({ ...form, fullName: event.target.value })}
           />
-          <select required value={form.visitorType} onChange={(event) => setForm({ ...form, visitorType: event.target.value })}>
+          <select value={form.visitorType} onChange={(event) => setForm({ ...form, visitorType: event.target.value })}>
             <option>General</option>
             <option>VIP</option>
             <option>Estudiante</option>
