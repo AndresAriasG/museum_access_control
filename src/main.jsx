@@ -43,6 +43,13 @@ const navItems = [
   { id: 'reportes', label: 'Reportes', icon: BarChart3 }
 ];
 
+const documentTypes = [
+  'Cedula de ciudadania',
+  'Pasaporte',
+  'Tarjeta de identidad',
+  'Cedula de extranjeria'
+];
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
@@ -64,6 +71,8 @@ function matchesSearch(item, query) {
   return [
     item.full_name,
     item.visitor_type,
+    item.document_type,
+    item.document_number,
     item.phone,
     item.room,
     item.ticket_code,
@@ -76,13 +85,15 @@ function matchesSearch(item, query) {
 }
 
 function exportCsv(rows) {
-  const headers = ['Nombre', 'Tipo', 'Telefono', 'Servicio', 'Fecha/Hora', 'Estado', 'QR', 'Ciudad', 'Pais', 'Validado por'];
+  const headers = ['Nombre', 'Tipo visitante', 'Tipo documento', 'Documento', 'Telefono', 'Servicio', 'Fecha/Hora', 'Estado', 'QR', 'Ciudad', 'Pais', 'Validado por'];
   const escape = (value) => `"${String(value || '').replace(/"/g, '""')}"`;
   const csv = [
     headers.join(','),
     ...rows.map((row) => [
       row.full_name,
       row.visitor_type,
+      row.document_type,
+      row.document_number,
       row.phone,
       row.room,
       row.entered_at || row.time,
@@ -110,6 +121,8 @@ function qrPayload(ticket) {
     ticketCode: ticket.code || ticket.ticket_code,
     entryId: ticket.entryId || ticket.entry_id,
     visitor: ticket.visitor || ticket.full_name,
+    documentType: ticket.documentType || ticket.document_type,
+    documentNumber: ticket.documentNumber || ticket.document_number,
     phone: ticket.phone,
     issuedAt: ticket.entered_at || ticket.issuedAt
   });
@@ -118,6 +131,8 @@ function qrPayload(ticket) {
 async function printQr(ticket) {
   const code = ticket.code || ticket.ticket_code;
   const visitor = ticket.visitor || ticket.full_name || 'Visitante';
+  const documentType = ticket.documentType || ticket.document_type || '';
+  const documentNumber = ticket.documentNumber || ticket.document_number || '';
   const phone = ticket.phone || '';
   const payload = qrPayload(ticket);
   const qrSrc = await QRCode.toDataURL(payload, {
@@ -146,6 +161,7 @@ async function printQr(ticket) {
           <img src="${qrSrc}" alt="QR ${code}" />
           <strong>${code}</strong>
           <p>${visitor}</p>
+          <p>${[documentType, documentNumber].filter(Boolean).join(': ')}</p>
           <p>${phone}</p>
           <p>${ticket.room || ''}</p>
         </main>
@@ -363,7 +379,7 @@ function VisitorTable({ visitors = [], wide = false }) {
           <div className="table-row" key={visitor.id}>
             <div>
               <strong>{visitor.full_name}</strong>
-              <span>{[visitor.visitor_type, visitor.phone, [visitor.city, visitor.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos'}</span>
+              <span>{[visitor.visitor_type, [visitor.document_type, visitor.document_number].filter(Boolean).join(': '), visitor.phone, [visitor.city, visitor.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos'}</span>
             </div>
             <span>{visitor.room}</span>
             <span>{visitor.time || visitor.entered_at}</span>
@@ -463,6 +479,7 @@ function Dashboard({ data }) {
 function EntryModule({ rooms, user, onSaved }) {
   const [form, setForm] = useState({
     fullName: '',
+    documentType: 'Cedula de ciudadania',
     documentNumber: '',
     visitorType: 'General',
     email: '',
@@ -494,11 +511,14 @@ function EntryModule({ rooms, user, onSaved }) {
         ticketId: data.ticket.id,
         entryId: data.entry.id,
         visitor: data.visitor.full_name,
+        documentType: data.visitor.document_type,
+        documentNumber: data.visitor.document_number,
         phone: data.visitor.phone,
         issuedAt: data.entry.entered_at
       });
       setForm({
         fullName: '',
+        documentType: 'Cedula de ciudadania',
         documentNumber: '',
         visitorType: 'General',
         email: '',
@@ -539,6 +559,9 @@ function EntryModule({ rooms, user, onSaved }) {
             <option>VIP</option>
             <option>Estudiante</option>
             <option>Grupo</option>
+          </select>
+          <select required value={form.documentType} onChange={(event) => setForm({ ...form, documentType: event.target.value })}>
+            {documentTypes.map((type) => <option value={type} key={type}>{type}</option>)}
           </select>
           <input required placeholder="Documento / ID" value={form.documentNumber} onChange={(event) => setForm({ ...form, documentNumber: event.target.value })} />
           <input required type="email" placeholder="Email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
@@ -740,7 +763,7 @@ function QrModule({ history }) {
             <QRCodeImage value={qrPayload(item)} label={item.ticket_code} />
             <div className="qr-list-info">
               <strong>{item.full_name}</strong>
-              <span>{[item.phone, item.room].filter(Boolean).join(' · ') || 'Sin datos'}</span>
+              <span>{[[item.document_type, item.document_number].filter(Boolean).join(': '), item.phone, item.room].filter(Boolean).join(' · ') || 'Sin datos'}</span>
               <span>{[item.city, item.country].filter(Boolean).join(', ') || 'Sin origen'}</span>
               <small>{item.entered_at}</small>
             </div>
@@ -764,7 +787,7 @@ function HistoryModule({ history, searchQuery, searchDraft, onSearchDraft, onSea
       <form className="history-toolbar" onSubmit={onSearchSubmit}>
         <div className="search-box history-search">
           <Search size={17} />
-          <input value={searchDraft} onChange={(event) => onSearchDraft(event.target.value)} placeholder="Buscar por nombre, telefono, QR, servicio, ciudad, pais o estado" />
+          <input value={searchDraft} onChange={(event) => onSearchDraft(event.target.value)} placeholder="Buscar por nombre, documento, telefono, QR, servicio, ciudad, pais o estado" />
         </div>
         <button className="ghost-btn" type="submit">Buscar</button>
         {searchQuery && <button className="ghost-btn" type="button" onClick={onClearSearch}>Limpiar</button>}
@@ -781,7 +804,7 @@ function HistoryModule({ history, searchQuery, searchDraft, onSearchDraft, onSea
           <div className="table-row history-row" key={item.id}>
             <div>
               <strong>{item.full_name}</strong>
-              <span>{[item.ticket_code || 'Sin QR', item.phone, [item.city, item.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos'}</span>
+              <span>{[item.ticket_code || 'Sin QR', [item.document_type, item.document_number].filter(Boolean).join(': '), item.phone, [item.city, item.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos'}</span>
             </div>
             <span>{item.room}</span>
             <span>{item.entered_at}</span>
@@ -879,7 +902,7 @@ function ReportsModule({ data, reports, accessReport, reportRange, onRangeChange
             <div className="table-row history-row" key={item.id}>
               <div>
                 <strong>{item.full_name}</strong>
-                <span>{[item.ticket_code || 'Sin QR', item.phone, [item.city, item.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos'}</span>
+                <span>{[item.ticket_code || 'Sin QR', [item.document_type, item.document_number].filter(Boolean).join(': '), item.phone, [item.city, item.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos'}</span>
               </div>
               <span>{item.room}</span>
               <span>{item.entered_at}</span>

@@ -32,6 +32,13 @@ function searchValue(req) {
   return String(req.query.search || "").trim();
 }
 
+const DOCUMENT_TYPES = new Set([
+  "Cedula de ciudadania",
+  "Pasaporte",
+  "Tarjeta de identidad",
+  "Cedula de extranjeria"
+]);
+
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
@@ -230,6 +237,8 @@ app.get("/api/dashboard", requireDb, async (req, res) => {
         `SELECT ae.id,
                 v.full_name,
                 v.visitor_type,
+                v.document_type,
+                v.document_number,
                 v.phone,
                 v.country,
                 v.city,
@@ -243,6 +252,8 @@ app.get("/api/dashboard", requireDb, async (req, res) => {
          WHERE ($1 = ''
            OR v.full_name ILIKE $2
            OR v.visitor_type ILIKE $2
+           OR v.document_type ILIKE $2
+           OR v.document_number ILIKE $2
            OR v.phone ILIKE $2
            OR v.country ILIKE $2
            OR v.city ILIKE $2
@@ -323,11 +334,12 @@ app.get("/api/dashboard", requireDb, async (req, res) => {
 });
 
 app.post("/api/entries", requireDb, async (req, res) => {
-  const { fullName, documentNumber, visitorType, email, phone, country, city, roomId, validatedBy } = req.body;
+  const { fullName, documentType, documentNumber, visitorType, email, phone, country, city, roomId, validatedBy } = req.body;
   const cleanName = String(fullName || "").trim();
+  const cleanDocumentType = String(documentType || "").trim();
   const cleanEmail = String(email || "").trim();
   const cleanPhone = String(phone || "").trim();
-  const requiredFields = { fullName, documentNumber, visitorType, email, phone, country, city, roomId };
+  const requiredFields = { fullName, documentType, documentNumber, visitorType, email, phone, country, city, roomId };
   const missingFields = Object.entries(requiredFields)
     .filter(([, value]) => !String(value || "").trim())
     .map(([key]) => key);
@@ -338,6 +350,10 @@ app.post("/api/entries", requireDb, async (req, res) => {
 
   if (!/^[\p{L}\s]+$/u.test(cleanName)) {
     return res.status(400).json({ error: "El nombre solo debe contener letras y espacios" });
+  }
+
+  if (!DOCUMENT_TYPES.has(cleanDocumentType)) {
+    return res.status(400).json({ error: "Selecciona un tipo de documento valido" });
   }
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
@@ -354,11 +370,12 @@ app.post("/api/entries", requireDb, async (req, res) => {
     await client.query("BEGIN");
 
     const visitor = await client.query(
-      `INSERT INTO museum_visitors (full_name, document_number, visitor_type, email, phone, country, city)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, full_name, visitor_type, phone, country, city`,
+      `INSERT INTO museum_visitors (full_name, document_type, document_number, visitor_type, email, phone, country, city)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, full_name, document_type, document_number, visitor_type, phone, country, city`,
       [
         cleanName,
+        cleanDocumentType,
         documentNumber.trim(),
         visitorType.trim(),
         cleanEmail,
@@ -414,6 +431,8 @@ app.post("/api/qr/validate", requireDb, async (req, res) => {
               t.signature,
               v.full_name,
               v.visitor_type,
+              v.document_type,
+              v.document_number,
               v.phone,
               v.country,
               v.city
@@ -446,6 +465,8 @@ app.get("/api/history", requireDb, async (req, res) => {
       `SELECT ae.id,
               v.full_name,
               v.visitor_type,
+              v.document_type,
+              v.document_number,
               v.phone,
               v.country,
               v.city,
@@ -463,6 +484,8 @@ app.get("/api/history", requireDb, async (req, res) => {
        WHERE ($1 = ''
          OR v.full_name ILIKE $2
          OR v.visitor_type ILIKE $2
+         OR v.document_type ILIKE $2
+         OR v.document_number ILIKE $2
          OR v.phone ILIKE $2
          OR v.country ILIKE $2
          OR v.city ILIKE $2
@@ -529,6 +552,8 @@ app.get("/api/reports/accesses", requireDb, async (req, res) => {
         `SELECT ae.id,
                 v.full_name,
                 v.visitor_type,
+                v.document_type,
+                v.document_number,
                 v.phone,
                 v.country,
                 v.city,

@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS museum_rooms (
 CREATE TABLE IF NOT EXISTS museum_visitors (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   full_name TEXT NOT NULL,
+  document_type TEXT NOT NULL DEFAULT 'Cedula de ciudadania',
   document_number TEXT,
   visitor_type TEXT NOT NULL DEFAULT 'General',
   email TEXT,

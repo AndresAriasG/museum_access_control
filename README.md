@@ -51,7 +51,7 @@ museum2026
 - `GET /api/reports/accesses`
 - `POST /api/access-users/init`
 
-Los visitantes guardan telefono, pais y ciudad en `museum_visitors.phone`, `museum_visitors.country` y `museum_visitors.city`.
+Los visitantes guardan tipo de documento, documento, telefono, pais y ciudad en `museum_visitors`.
 Los servicios se administran desde el modulo `Servicios` y se guardan en `museum_rooms`.
 La busqueda global se aplica con boton `Buscar` y filtra visitantes, servicios, QR, ciudad, pais, tipo, fecha y estado.
 La campana muestra alertas operativas como servicios pendientes o visitantes dentro.
