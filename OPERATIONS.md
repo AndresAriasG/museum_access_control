@@ -49,8 +49,18 @@ Luego crea los demas usuarios desde el modulo `Usuarios`.
 2. Registra una entrada manual o por carga masiva.
 3. La aplicacion genera un QR por visitante.
 4. El QR tiene vigencia de 3 horas.
-5. El QR se puede imprimir o validar desde el modulo `Validar QR`.
+5. El QR se puede ampliar, descargar como PNG, imprimir o validar desde el modulo `Validar QR`.
 6. Reportes e historial se actualizan con los accesos registrados.
+
+## Entrega de QR al visitante
+
+Desde `QR generados`:
+
+- Click en el QR o boton `Ver` para abrirlo grande.
+- `Descargar PNG` para guardarlo y enviarlo por WhatsApp, correo manual o cualquier canal.
+- `Imprimir` para entrega fisica.
+
+El envio automatico por correo requiere configurar un proveedor SMTP o API transaccional. Para Gmail gratuito se recomienda usar una contrasena de aplicacion con verificacion en dos pasos, o dejarlo para una fase posterior con un proveedor dedicado.
 
 ## Carga masiva
 

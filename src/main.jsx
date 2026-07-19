@@ -218,13 +218,42 @@ async function printQr(ticket) {
   printWindow.document.close();
 }
 
-function QRCodeImage({ value, label }) {
+function safeFileName(value) {
+  return String(value || 'qr')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+}
+
+async function qrDataUrl(ticket, width = 900) {
+  return QRCode.toDataURL(qrPayload(ticket), {
+    width,
+    margin: 2,
+    color: { dark: '#071014', light: '#ffffff' }
+  });
+}
+
+async function downloadQr(ticket) {
+  const code = ticket.code || ticket.ticket_code || 'qr';
+  const visitor = ticket.visitor || ticket.full_name || 'visitante';
+  const src = await qrDataUrl(ticket, 900);
+  const link = document.createElement('a');
+  link.href = src;
+  link.download = `${safeFileName(visitor)}-${safeFileName(code)}.png`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function QRCodeImage({ value, label, size = 220, onClick }) {
   const [src, setSrc] = useState('');
 
   useEffect(() => {
     let active = true;
     QRCode.toDataURL(value, {
-      width: 220,
+      width: size,
       margin: 2,
       color: {
         dark: '#071014',
@@ -241,7 +270,7 @@ function QRCodeImage({ value, label }) {
   if (!src) return <div className="qr-placeholder">Generando QR...</div>;
 
   return (
-    <figure className="qr-figure">
+    <figure className={`qr-figure ${onClick ? 'is-clickable' : ''}`} onClick={onClick}>
       <img src={src} alt={`QR ${label || value}`} />
       <figcaption>{label || value}</figcaption>
     </figure>
@@ -1046,30 +1075,61 @@ function RoomsModule({ rooms, user, onSaved }) {
 
 function QrModule({ history }) {
   const tickets = history.filter((item) => item.ticket_code).slice(0, 12);
+  const [selectedTicket, setSelectedTicket] = useState(null);
+
   return (
-    <section className="panel glass full">
-      <div className="panel-head">
-        <div>
-          <p className="eyebrow">Emision</p>
-          <h3>QR generados por ingreso</h3>
+    <>
+      <section className="panel glass full">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Emision</p>
+            <h3>QR generados por ingreso</h3>
+          </div>
         </div>
-      </div>
-      {tickets.length === 0 && <p className="empty-state">Aun no hay QR generados. Registra una entrada para crear el primero.</p>}
-      <div className="qr-list">
-        {tickets.map((item) => (
-          <article className="qr-list-row" key={item.id}>
-            <QRCodeImage value={qrPayload(item)} label={item.ticket_code} />
-            <div className="qr-list-info">
-              <strong>{item.full_name}</strong>
-              <span>{[[item.document_type, item.document_number].filter(Boolean).join(': '), item.phone, item.room].filter(Boolean).join(' · ') || 'Sin datos'}</span>
-              <span>{[item.city, item.country].filter(Boolean).join(', ') || 'Sin origen'}</span>
-              <small>{item.entered_at}</small>
+        {tickets.length === 0 && <p className="empty-state">Aun no hay QR generados. Registra una entrada para crear el primero.</p>}
+        <div className="qr-list">
+          {tickets.map((item) => (
+            <article className="qr-list-row" key={item.id}>
+              <QRCodeImage value={qrPayload(item)} label={item.ticket_code} onClick={() => setSelectedTicket(item)} />
+              <div className="qr-list-info">
+                <strong>{item.full_name}</strong>
+                <span>{[[item.document_type, item.document_number].filter(Boolean).join(': '), item.phone, item.room].filter(Boolean).join(' · ') || 'Sin datos'}</span>
+                <span>{[item.city, item.country].filter(Boolean).join(', ') || 'Sin origen'}</span>
+                <small>{item.entered_at}</small>
+              </div>
+              <div className="qr-actions">
+                <button className="ghost-btn" type="button" onClick={() => setSelectedTicket(item)}>Ver</button>
+                <button className="ghost-btn" type="button" onClick={() => downloadQr(item)}>Descargar</button>
+                <button className="ghost-btn" type="button" onClick={() => printQr(item)}>Imprimir</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+      {selectedTicket && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setSelectedTicket(null)}>
+          <section className="qr-modal glass" role="dialog" aria-modal="true" aria-label={`QR ${selectedTicket.ticket_code}`} onClick={(event) => event.stopPropagation()}>
+            <button className="modal-close" type="button" onClick={() => setSelectedTicket(null)} aria-label="Cerrar">
+              <X size={22} />
+            </button>
+            <div className="qr-modal-content">
+              <QRCodeImage value={qrPayload(selectedTicket)} label={selectedTicket.ticket_code} size={680} />
+              <div className="qr-modal-info">
+                <p className="eyebrow">QR de acceso</p>
+                <h3>{selectedTicket.full_name}</h3>
+                <span>{[[selectedTicket.document_type, selectedTicket.document_number].filter(Boolean).join(': '), selectedTicket.room].filter(Boolean).join(' · ')}</span>
+                <span>{[selectedTicket.city, selectedTicket.country].filter(Boolean).join(', ') || 'Sin origen'}</span>
+                <small>{selectedTicket.entered_at}</small>
+                <div className="row-actions">
+                  <button className="primary-btn compact-btn" type="button" onClick={() => downloadQr(selectedTicket)}>Descargar PNG</button>
+                  <button className="ghost-btn" type="button" onClick={() => printQr(selectedTicket)}>Imprimir</button>
+                </div>
+              </div>
             </div>
-            <button className="ghost-btn" type="button" onClick={() => printQr(item)}>Imprimir QR</button>
-          </article>
-        ))}
-      </div>
-    </section>
+          </section>
+        </div>
+      )}
+    </>
   );
 }
 

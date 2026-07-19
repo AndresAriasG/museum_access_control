@@ -845,7 +845,7 @@ select,
 
 .qr-list-row {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) auto;
+  grid-template-columns: 120px minmax(0, 1fr) minmax(240px, auto);
   align-items: center;
   gap: 16px;
   min-height: 132px;
@@ -865,11 +865,22 @@ select,
   min-width: 0;
 }
 
+.qr-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .qr-figure {
   display: grid;
   place-items: center;
   gap: 9px;
   margin: 0;
+}
+
+.qr-figure.is-clickable {
+  cursor: zoom-in;
 }
 
 .qr-figure img {
@@ -887,6 +898,67 @@ select,
   color: var(--muted);
   font-size: 0.84rem;
   overflow-wrap: anywhere;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(7, 16, 20, 0.58);
+  backdrop-filter: blur(10px);
+}
+
+.qr-modal {
+  position: relative;
+  width: min(920px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+  border-radius: 22px;
+  padding: 24px;
+}
+
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+}
+
+.qr-modal-content {
+  display: grid;
+  grid-template-columns: minmax(260px, 420px) minmax(240px, 1fr);
+  align-items: center;
+  gap: 24px;
+}
+
+.qr-modal .qr-figure img {
+  width: min(420px, 100%);
+}
+
+.qr-modal-info {
+  display: grid;
+  gap: 10px;
+}
+
+.qr-modal-info h3 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 3.4rem);
+}
+
+.qr-modal-info span,
+.qr-modal-info small {
+  color: var(--muted);
 }
 
 .qr-placeholder {
@@ -1359,8 +1431,26 @@ mark {
     justify-items: start;
   }
 
+  .qr-actions,
   .qr-list-row .ghost-btn {
     width: 100%;
+    justify-content: stretch;
+  }
+
+  .qr-actions .ghost-btn {
+    flex: 1;
+  }
+
+  .qr-modal {
+    padding: 18px;
+  }
+
+  .qr-modal-content {
+    grid-template-columns: 1fr;
+  }
+
+  .qr-modal .qr-figure img {
+    width: min(320px, 100%);
   }
 
   .room-row {
