@@ -535,6 +535,10 @@ const bulkFieldAliases = {
   room: ['servicio', 'sala', 'room']
 };
 
+const bulkEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const bulkPhonePattern = /^[0-9+\s()-]{7,20}$/;
+const bulkNamePattern = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+$/;
+
 function normalizeHeader(value) {
   return String(value || '')
     .trim()
@@ -553,44 +557,55 @@ function firstValue(row, aliases) {
   return alias ? String(normalizedRow[normalizeHeader(alias)] || '').trim() : '';
 }
 
-function roomIdForBulkRow(row, rooms, fallbackRoomId) {
-  const roomName = firstValue(row, bulkFieldAliases.room);
-  if (!roomName) return fallbackRoomId || '';
-  const normalizedRoomName = normalizeHeader(roomName);
-  const room = rooms.find((item) => normalizeHeader(item.name) === normalizedRoomName);
-  return room?.id || '';
+function normalizeDocumentTypeValue(value) {
+  const normalizedValue = normalizeHeader(value);
+  return documentTypes.find((type) => normalizeHeader(type) === normalizedValue) || '';
 }
 
-function mapBulkRows(rows, rooms, fallbackRoomId) {
+function defaultBulkRoom(rooms) {
+  return rooms.find((item) => normalizeHeader(item.name) === 'eventos') || null;
+}
+
+function roomForBulkRow(row, rooms) {
+  const roomName = firstValue(row, bulkFieldAliases.room);
+  if (roomName) {
+    const normalizedRoomName = normalizeHeader(roomName);
+    const room = rooms.find((item) => normalizeHeader(item.name) === normalizedRoomName);
+    if (room) return room;
+  }
+  return defaultBulkRoom(rooms);
+}
+
+function mapBulkRows(rows, rooms) {
   return rows
     .map((row, index) => {
-      const roomId = roomIdForBulkRow(row, rooms, fallbackRoomId);
-      const room = rooms.find((item) => item.id === roomId);
+      const room = roomForBulkRow(row, rooms);
+      const rawDocumentType = firstValue(row, bulkFieldAliases.documentType);
       return {
         rowNumber: index + 2,
         fullName: firstValue(row, bulkFieldAliases.fullName),
-        documentType: firstValue(row, bulkFieldAliases.documentType) || 'Cedula de ciudadania',
+        documentType: normalizeDocumentTypeValue(rawDocumentType),
+        documentTypeRaw: rawDocumentType,
         documentNumber: firstValue(row, bulkFieldAliases.documentNumber),
         visitorType: firstValue(row, bulkFieldAliases.visitorType) || 'General',
         email: firstValue(row, bulkFieldAliases.email),
         phone: firstValue(row, bulkFieldAliases.phone),
         country: firstValue(row, bulkFieldAliases.country),
         city: firstValue(row, bulkFieldAliases.city),
-        roomId,
-        roomName: room?.name || firstValue(row, bulkFieldAliases.room) || '',
+        roomId: room?.id || '',
+        roomName: room?.name || 'Eventos',
         status: 'pending',
         message: ''
       };
     })
-    .filter((row) => [row.fullName, row.documentNumber, row.country, row.city, row.roomName].some(Boolean));
+    .filter((row) => [row.fullName, row.documentNumber, row.country, row.city, row.email, row.phone].some(Boolean));
 }
 
 function downloadBulkTemplate(rooms) {
-  const headers = ['Nombre', 'Tipo documento', 'Documento', 'Tipo visitante', 'Email', 'Telefono', 'Pais', 'Ciudad', 'Servicio'];
-  const sampleRoom = rooms[0]?.name || 'Recorridos';
+  const headers = ['Nombre', 'Tipo documento', 'Documento', 'Tipo visitante', 'Email', 'Telefono', 'Pais', 'Ciudad'];
   const rows = [
     headers,
-    ['Ana Perez', 'Cedula de ciudadania', '123456789', 'General', '', '', 'Colombia', 'Medellin', sampleRoom]
+    ['Ana Perez', 'Cedula de ciudadania', '123456789', 'General', '', '', 'Colombia', 'Medellin']
   ];
   const csv = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -689,9 +704,12 @@ function EntryModule({ rooms, user, onSaved }) {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
       }
-      const mappedRows = mapBulkRows(rows, rooms, form.roomId);
+      const mappedRows = mapBulkRows(rows, rooms).map((row) => {
+        const issues = bulkRowIssues(row);
+        return issues.length > 0 ? { ...row, status: 'error', message: issues.join(', ') } : row;
+      });
       setBulkRows(mappedRows);
-      setBulkMessage(mappedRows.length ? `${mappedRows.length} fila(s) listas para revisar.` : 'No se encontraron filas validas en el archivo.');
+      setBulkMessage(mappedRows.length ? `${mappedRows.length} fila(s) listas para revisar. Servicio por defecto: Eventos.` : 'No se encontraron filas validas en el archivo.');
     } catch (_error) {
       setBulkMessage('No se pudo leer el archivo. Usa .xlsx, .xls o .csv con la plantilla.');
     } finally {
@@ -699,15 +717,22 @@ function EntryModule({ rooms, user, onSaved }) {
     }
   }
 
-  function bulkRowMissingFields(row) {
-    return [
+  function bulkRowIssues(row) {
+    const issues = [
       ['Nombre', row.fullName],
       ['Tipo documento', row.documentType],
       ['Documento', row.documentNumber],
       ['Pais', row.country],
-      ['Ciudad', row.city],
-      ['Servicio', row.roomId]
+      ['Ciudad', row.city]
     ].filter(([, value]) => !String(value || '').trim()).map(([label]) => label);
+
+    if (row.fullName && !bulkNamePattern.test(row.fullName)) issues.push('Nombre solo texto');
+    if (row.email && !bulkEmailPattern.test(row.email)) issues.push('Email invalido');
+    if (row.phone && !bulkPhonePattern.test(row.phone)) issues.push('Telefono invalido');
+    if (row.documentTypeRaw && !row.documentType) issues.push('Tipo documento no valido');
+    if (!row.roomId) issues.push('Servicio Eventos no disponible');
+
+    return issues;
   }
 
   async function submitBulkRows() {
@@ -719,9 +744,11 @@ function EntryModule({ rooms, user, onSaved }) {
 
     for (let index = 0; index < nextRows.length; index += 1) {
       const row = nextRows[index];
-      const missing = bulkRowMissingFields(row);
-      if (missing.length > 0) {
-        nextRows[index] = { ...row, status: 'error', message: `Faltan: ${missing.join(', ')}` };
+      if (row.status === 'saved') continue;
+
+      const issues = bulkRowIssues(row);
+      if (issues.length > 0) {
+        nextRows[index] = { ...row, status: 'error', message: issues.join(', ') };
         failed += 1;
         setBulkRows([...nextRows]);
         continue;
@@ -824,7 +851,7 @@ function EntryModule({ rooms, user, onSaved }) {
         </div>
         <div className="bulk-upload">
           <input type="file" accept=".xlsx,.xls,.csv" onChange={handleBulkFile} />
-          <span>Columnas: Nombre, Tipo documento, Documento, Pais, Ciudad y Servicio. Email y Telefono son opcionales.</span>
+          <span>Obligatorias: Nombre, Tipo documento, Documento, Pais y Ciudad. Email y Telefono son opcionales. Servicio se asigna como Eventos.</span>
         </div>
         {bulkMessage && <p className="form-message">{bulkMessage}</p>}
         {bulkRows.length > 0 && (

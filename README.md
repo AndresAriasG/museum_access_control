@@ -70,7 +70,7 @@ El modulo `Reportes` permite filtrar accesos por rango de fechas, ver rankings y
 El dashboard muestra primero ingresos por dia y debajo el detalle por hora con etiquetas visibles.
 El registro valida que el nombre tenga solo letras; si se diligencia email o telefono, tambien valida su formato.
 Cada registro de entrada genera un QR por persona, relacionado con `ticketId`, `ticketCode` y `entryId`, valido por 3 horas; los QR nuevos apuntan a `/?qr=CODIGO` para que la camara nativa del celular abra la validacion, y el modulo `Validar QR` tambien permite pegar el codigo o enlace manualmente.
-El modulo `Registrar Entrada` permite carga masiva desde `.xlsx`, `.xls` o `.csv` con columnas `Nombre`, `Tipo documento`, `Documento`, `Pais`, `Ciudad`, `Servicio`, y opcionales `Email`, `Telefono`, `Tipo visitante`.
+El modulo `Registrar Entrada` permite carga masiva desde `.xlsx`, `.xls` o `.csv` con columnas obligatorias `Nombre`, `Tipo documento`, `Documento`, `Pais`, `Ciudad`, y opcionales `Email`, `Telefono`, `Tipo visitante`, `Servicio`. Si el archivo no trae `Servicio`, el acceso se registra como `Eventos`.
 
 ## Railway
 
