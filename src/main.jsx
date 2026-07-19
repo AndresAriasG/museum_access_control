@@ -530,7 +530,7 @@ function EntryModule({ rooms, user, onSaved }) {
     visitorType: 'General',
     email: '',
     phone: '',
-    country: 'Colombia',
+    country: '',
     city: '',
     roomId: rooms[0]?.id || ''
   });
@@ -571,7 +571,7 @@ function EntryModule({ rooms, user, onSaved }) {
         visitorType: 'General',
         email: '',
         phone: '',
-        country: 'Colombia',
+        country: '',
         city: '',
         roomId: rooms[0]?.id || ''
       });
@@ -612,19 +612,18 @@ function EntryModule({ rooms, user, onSaved }) {
             {documentTypes.map((type) => <option value={type} key={type}>{type}</option>)}
           </select>
           <input required placeholder="Documento / ID" value={form.documentNumber} onChange={(event) => setForm({ ...form, documentNumber: event.target.value })} />
-          <input required type="email" placeholder="Email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+          <input type="email" placeholder="Email opcional" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
           <input
-            required
             type="tel"
             pattern="[0-9+\s()-]{7,20}"
             title="Usa entre 7 y 20 caracteres: numeros, espacios, +, guiones o parentesis"
-            placeholder="Telefono"
+            placeholder="Telefono opcional"
             value={form.phone}
             onChange={(event) => setForm({ ...form, phone: event.target.value })}
           />
           <div className="form-grid">
-            <input required placeholder="Pais" value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value })} />
-            <input required placeholder="Ciudad" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
+            <input placeholder="Pais opcional" value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value })} />
+            <input placeholder="Ciudad opcional" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
           </div>
           <select required value={form.roomId} onChange={(event) => setForm({ ...form, roomId: event.target.value })}>
             <option value="" disabled>Selecciona un servicio</option>

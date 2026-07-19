@@ -600,7 +600,11 @@ app.post("/api/entries", requireDb, async (req, res) => {
   const cleanDocumentType = String(documentType || "").trim();
   const cleanEmail = String(email || "").trim();
   const cleanPhone = String(phone || "").trim();
-  const requiredFields = { fullName, documentType, documentNumber, visitorType, email, phone, country, city, roomId };
+  const cleanDocumentNumber = String(documentNumber || "").trim();
+  const cleanVisitorType = String(visitorType || "").trim();
+  const cleanCountry = String(country || "").trim();
+  const cleanCity = String(city || "").trim();
+  const requiredFields = { fullName, documentType, documentNumber, visitorType, roomId };
   const missingFields = Object.entries(requiredFields)
     .filter(([, value]) => !String(value || "").trim())
     .map(([key]) => key);
@@ -617,11 +621,11 @@ app.post("/api/entries", requireDb, async (req, res) => {
     return res.status(400).json({ error: "Selecciona un tipo de documento valido" });
   }
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+  if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
     return res.status(400).json({ error: "El email debe tener un formato valido" });
   }
 
-  if (!/^[0-9+\s()-]{7,20}$/.test(cleanPhone)) {
+  if (cleanPhone && !/^[0-9+\s()-]{7,20}$/.test(cleanPhone)) {
     return res.status(400).json({ error: "El telefono debe tener un formato valido" });
   }
 
@@ -637,12 +641,12 @@ app.post("/api/entries", requireDb, async (req, res) => {
       [
         cleanName,
         cleanDocumentType,
-        documentNumber.trim(),
-        visitorType.trim(),
+        cleanDocumentNumber,
+        cleanVisitorType,
         cleanEmail,
         cleanPhone,
-        country.trim(),
-        city.trim()
+        cleanCountry,
+        cleanCity
       ]
     );
 
