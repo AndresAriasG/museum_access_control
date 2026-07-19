@@ -204,6 +204,7 @@ async function printQr(ticket) {
           <p>${phone}</p>
           <p>${ticket.room || ''}</p>
           <p>Valido hasta: ${validUntil || '3 horas desde emision'}</p>
+          <p>Escanea con la camara del celular para validar.</p>
         </main>
         <script>window.onload = () => { window.print(); window.close(); };</script>
       </body>
@@ -850,6 +851,9 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
   const [scanning, setScanning] = useState(false);
   const videoRef = React.useRef(null);
   const streamRef = React.useRef(null);
+  const scannerSupported = typeof window !== 'undefined'
+    && 'BarcodeDetector' in window
+    && Boolean(navigator.mediaDevices?.getUserMedia);
 
   function stopScanner() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -878,8 +882,8 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
   }
 
   async function startScanner() {
-    if (!('BarcodeDetector' in window)) {
-      setMessage('Este navegador no permite lectura directa desde la app. Usa la camara del celular sobre el QR impreso o pega el codigo manualmente.');
+    if (!scannerSupported) {
+      setMessage('Usa la camara nativa del celular sobre el QR impreso o pega el codigo manualmente.');
       return;
     }
 
@@ -939,20 +943,27 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
           <textarea
             required
             rows="5"
-            placeholder="Pega aqui el codigo o el contenido del QR"
+            placeholder="Pega aqui el codigo, el enlace o el contenido del QR"
             value={code}
             onChange={(event) => setCode(event.target.value)}
           />
+          {!scannerSupported && (
+            <p className="qr-helper">
+              En este dispositivo usa la camara nativa del celular para abrir el QR impreso. Si ya estas dentro de la app, tambien puedes pegar aqui el codigo MAC o el enlace del QR.
+            </p>
+          )}
           {message && <p className={`form-message ${result?.approved === false ? 'error' : ''}`}>{message}</p>}
           <div className="row-actions">
             <button className="primary-btn" type="submit" disabled={loading}>
               <TicketCheck size={18} />
               {loading ? 'Validando...' : 'Validar ingreso'}
             </button>
-            <button className="ghost-btn" type="button" onClick={scanning ? stopScanner : startScanner}>
-              <QrCode size={17} />
-              {scanning ? 'Detener camara' : 'Leer con camara'}
-            </button>
+            {scannerSupported && (
+              <button className="ghost-btn" type="button" onClick={scanning ? stopScanner : startScanner}>
+                <QrCode size={17} />
+                {scanning ? 'Detener camara' : 'Leer con camara'}
+              </button>
+            )}
           </div>
           {scanning && <video className="qr-video" ref={videoRef} muted playsInline />}
         </form>
