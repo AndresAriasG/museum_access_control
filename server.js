@@ -5,6 +5,13 @@ const { Pool } = require("pg");
 
 const app = express();
 const distPath = path.join(__dirname, "dist");
+const authSecret = process.env.APP_SECRET || crypto.randomBytes(32).toString("hex");
+const tokenTtlMs = Number(process.env.SESSION_TTL_MS || 8 * 60 * 60 * 1000);
+const loginAttempts = new Map();
+
+if (!process.env.APP_SECRET) {
+  console.warn("APP_SECRET is not configured. Sessions will reset on server restart.");
+}
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -53,19 +60,94 @@ function normalizeDocumentType(value) {
   return DOCUMENT_TYPES.find((type) => normalizeText(type) === normalizedValue) || "";
 }
 
+function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
+  const hash = crypto.scryptSync(String(password || ""), salt, 64).toString("hex");
+  return `scrypt$${salt}$${hash}`;
+}
+
+function verifyPassword(password, storedHash) {
+  const stored = String(storedHash || "");
+  if (!stored.startsWith("scrypt$")) {
+    return String(password || "") === stored;
+  }
+  const [, salt, hash] = stored.split("$");
+  const candidate = crypto.scryptSync(String(password || ""), salt, 64).toString("hex");
+  return crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(hash));
+}
+
+function base64url(value) {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
+function signToken(user) {
+  const payload = {
+    sub: user.id,
+    username: user.username,
+    role: user.role,
+    exp: Date.now() + tokenTtlMs
+  };
+  const body = base64url(payload);
+  const signature = crypto.createHmac("sha256", authSecret).update(body).digest("base64url");
+  return `${body}.${signature}`;
+}
+
+function verifyToken(token) {
+  const [body, signature] = String(token || "").split(".");
+  if (!body || !signature) return null;
+  const expected = crypto.createHmac("sha256", authSecret).update(body).digest("base64url");
+  if (Buffer.byteLength(signature) !== Buffer.byteLength(expected)) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+    if (!payload.exp || payload.exp < Date.now()) return null;
+    return payload;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function requireAuth(req, res, next) {
+  const token = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: "Sesion invalida o vencida" });
+  req.user = {
+    id: payload.sub,
+    username: payload.username,
+    role: payload.role
+  };
+  return next();
+}
+
+function requireRole(...roles) {
+  return (req, res, next) => requireAuth(req, res, () => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: "No tienes permisos para esta accion" });
+    }
+    return next();
+  });
+}
+
 function requireAdmin(req, res, next) {
-  if (req.headers["x-user-role"] !== "admin") {
-    return res.status(403).json({ error: "No tienes permisos de administrador" });
+  return requireRole("admin")(req, res, next);
+}
+
+function requireSetupSecret(req, res, next) {
+  if (!process.env.SETUP_SECRET) {
+    return res.status(403).json({ error: "SETUP_SECRET no esta configurado" });
   }
 
-  next();
+  if (req.headers["x-setup-secret"] !== process.env.SETUP_SECRET) {
+    return res.status(403).json({ error: "No tienes permisos para inicializar usuarios" });
+  }
+
+  return next();
 }
 
 function actorFromRequest(req) {
   return {
-    id: req.headers["x-user-id"] || null,
-    username: req.headers["x-username"] || null,
-    role: req.headers["x-user-role"] || null
+    id: req.user?.id || null,
+    username: req.user?.username || null,
+    role: req.user?.role || null
   };
 }
 
@@ -108,6 +190,37 @@ async function roleExists(role) {
   return result.rows.length > 0;
 }
 
+function loginRateKey(req, username) {
+  return `${req.ip}:${String(username || "").trim().toLowerCase()}`;
+}
+
+function checkLoginRate(req, username) {
+  const key = loginRateKey(req, username);
+  const now = Date.now();
+  const current = loginAttempts.get(key) || { count: 0, firstAt: now, blockedUntil: 0 };
+  if (current.blockedUntil > now) return false;
+  if (now - current.firstAt > 15 * 60 * 1000) {
+    loginAttempts.set(key, { count: 0, firstAt: now, blockedUntil: 0 });
+  }
+  return true;
+}
+
+function recordLoginFailure(req, username) {
+  const key = loginRateKey(req, username);
+  const now = Date.now();
+  const current = loginAttempts.get(key) || { count: 0, firstAt: now, blockedUntil: 0 };
+  const nextCount = current.count + 1;
+  loginAttempts.set(key, {
+    count: nextCount,
+    firstAt: current.firstAt,
+    blockedUntil: nextCount >= 5 ? now + 10 * 60 * 1000 : 0
+  });
+}
+
+function clearLoginFailures(req, username) {
+  loginAttempts.delete(loginRateKey(req, username));
+}
+
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
@@ -116,17 +229,43 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.post("/api/access-users/init", requireDb, async (req, res) => {
+app.post("/api/access-users/init", requireDb, requireSetupSecret, async (req, res) => {
+  const cleanUsername = String(req.body.username || "accesos@museo.gov").trim().toLowerCase();
+  const cleanFirstName = String(req.body.firstName || "Control").trim();
+  const cleanLastName = String(req.body.lastName || "Accesos").trim();
+  const cleanRole = String(req.body.role || "registrar").trim();
+  const initialPassword = String(req.body.password || process.env.ACCESS_USER_INITIAL_PASSWORD || "").trim();
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanUsername)) {
+    return res.status(400).json({ error: "El usuario debe tener formato de correo" });
+  }
+
+  if (!cleanFirstName || !cleanRole) {
+    return res.status(400).json({ error: "Nombre y rol son obligatorios" });
+  }
+
+  if (initialPassword.length < 8) {
+    return res.status(400).json({ error: "Define una contrasena inicial de al menos 8 caracteres" });
+  }
+
+  if (!(await roleExists(cleanRole))) {
+    return res.status(400).json({ error: "Rol no valido" });
+  }
+
   try {
+    const passwordHash = hashPassword(initialPassword);
     const result = await pool.query(
       `INSERT INTO museum_auth_users (username, password_hash, first_name, last_name, role)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (username) DO UPDATE
-       SET is_active = true,
+       SET password_hash = EXCLUDED.password_hash,
+           first_name = EXCLUDED.first_name,
+           last_name = EXCLUDED.last_name,
+           is_active = true,
            role = EXCLUDED.role,
            updated_at = now()
        RETURNING id, username, first_name, last_name, role`,
-      ["accesos@museo.gov", "museum2026", "Control", "Accesos", "registrar"]
+      [cleanUsername, passwordHash, cleanFirstName, cleanLastName, cleanRole]
     );
 
     await auditLog(pool, req, "access_user_initialized", "auth_user", result.rows[0].id, {
@@ -190,6 +329,7 @@ app.post("/api/auth-users", requireDb, requireAdmin, async (req, res) => {
   }
 
   try {
+    const passwordHash = hashPassword(cleanPassword);
     const result = await pool.query(
       `INSERT INTO museum_auth_users (username, password_hash, first_name, last_name, role, is_active)
        VALUES ($1, $2, $3, $4, $5, true)
@@ -201,7 +341,7 @@ app.post("/api/auth-users", requireDb, requireAdmin, async (req, res) => {
            is_active = true,
            updated_at = now()
        RETURNING id, username, first_name, last_name, role, is_active, created_at, updated_at`,
-      [cleanUsername, cleanPassword, cleanFirstName, cleanLastName, cleanRole]
+      [cleanUsername, passwordHash, cleanFirstName, cleanLastName, cleanRole]
     );
 
     await auditLog(pool, req, "auth_user_saved", "auth_user", result.rows[0].id, {
@@ -237,6 +377,7 @@ app.patch("/api/auth-users/:id", requireDb, requireAdmin, async (req, res) => {
   }
 
   try {
+    const passwordHash = hasPassword ? hashPassword(cleanPassword) : "";
     const result = await pool.query(
       `UPDATE museum_auth_users
        SET first_name = $1,
@@ -247,7 +388,7 @@ app.patch("/api/auth-users/:id", requireDb, requireAdmin, async (req, res) => {
            updated_at = now()
        WHERE id = $6
        RETURNING id, username, first_name, last_name, role, is_active, created_at, updated_at`,
-      [cleanFirstName, cleanLastName, cleanRole, Boolean(isActive), cleanPassword, req.params.id]
+      [cleanFirstName, cleanLastName, cleanRole, Boolean(isActive), passwordHash, req.params.id]
     );
 
     if (result.rows.length === 0) {
@@ -313,6 +454,12 @@ app.get("/api/role-profiles", requireDb, requireAdmin, async (_req, res) => {
 
 app.post("/api/login", requireDb, async (req, res) => {
   const { username, password } = req.body;
+  const cleanUsername = String(username || "").trim().toLowerCase();
+  const cleanPassword = String(password || "");
+
+  if (!checkLoginRate(req, cleanUsername)) {
+    return res.status(429).json({ error: "Demasiados intentos. Intenta de nuevo en unos minutos" });
+  }
 
   try {
     const result = await pool.query(
@@ -321,19 +468,37 @@ app.post("/api/login", requireDb, async (req, res) => {
               u.first_name,
               u.last_name,
               u.role,
+              u.password_hash,
               COALESCE(p.name, u.role) AS role_name,
               COALESCE(p.allowed_modules, '[]'::jsonb) AS allowed_modules
        FROM museum_auth_users u
        LEFT JOIN museum_role_profiles p ON p.code = u.role
-       WHERE u.username = $1 AND u.password_hash = $2 AND u.is_active = true`,
-      [username, password]
+       WHERE u.username = $1 AND u.is_active = true`,
+      [cleanUsername]
     );
 
-    if (result.rows.length === 0) {
+    if (result.rows.length === 0 || !verifyPassword(cleanPassword, result.rows[0].password_hash)) {
+      recordLoginFailure(req, cleanUsername);
       await auditLog(pool, req, "login_failed", "auth_user", null, {
-        username: String(username || "").trim().toLowerCase()
+        username: cleanUsername
       });
       return res.status(401).json({ error: "Usuario o contrasena incorrectos" });
+    }
+
+    clearLoginFailures(req, cleanUsername);
+    const user = result.rows[0];
+    const storedPasswordHash = user.password_hash;
+    delete user.password_hash;
+    const token = signToken(user);
+
+    if (!String(storedPasswordHash || "").startsWith("scrypt$")) {
+      await pool.query(
+        `UPDATE museum_auth_users
+         SET password_hash = $1,
+             updated_at = now()
+         WHERE id = $2`,
+        [hashPassword(cleanPassword), user.id]
+      );
     }
 
     await auditLog(pool, req, "login_success", "auth_user", result.rows[0].id, {
@@ -342,14 +507,14 @@ app.post("/api/login", requireDb, async (req, res) => {
       role: result.rows[0].role
     });
 
-    res.json({ user: result.rows[0] });
+    res.json({ user: { ...user, token } });
   } catch (error) {
     console.error("Login query failed:", error);
     res.status(500).json({ error: "No se pudo validar el acceso" });
   }
 });
 
-app.get("/api/rooms", requireDb, async (_req, res) => {
+app.get("/api/rooms", requireDb, requireAuth, async (_req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, name, capacity
@@ -463,7 +628,7 @@ app.delete("/api/rooms/:id", requireDb, requireAdmin, async (req, res) => {
   }
 });
 
-app.get("/api/dashboard", requireDb, async (req, res) => {
+app.get("/api/dashboard", requireDb, requireAuth, async (req, res) => {
   const search = searchValue(req);
   const recentSearch = `%${search}%`;
 
@@ -608,8 +773,8 @@ app.get("/api/dashboard", requireDb, async (req, res) => {
   }
 });
 
-app.post("/api/entries", requireDb, async (req, res) => {
-  const { fullName, documentType, documentNumber, visitorType, email, phone, country, city, roomId, validatedBy } = req.body;
+app.post("/api/entries", requireDb, requireRole("admin", "registrar", "operator"), async (req, res) => {
+  const { fullName, documentType, documentNumber, visitorType, email, phone, country, city, roomId } = req.body;
   const cleanName = String(fullName || "").trim();
   const cleanDocumentType = normalizeDocumentType(documentType);
   const rawDocumentType = String(documentType || "").trim();
@@ -683,7 +848,7 @@ app.post("/api/entries", requireDb, async (req, res) => {
       `INSERT INTO museum_access_entries (visitor_id, room_id, ticket_id, status, validated_by, notes)
        VALUES ($1, $2, $3, 'inside', $4, 'Registro desde dashboard')
        RETURNING id, entered_at, status`,
-      [visitor.rows[0].id, roomId, ticket.rows[0].id, validatedBy || null]
+      [visitor.rows[0].id, roomId, ticket.rows[0].id, req.user.id]
     );
 
     const auditDetails = {
@@ -714,7 +879,7 @@ app.post("/api/entries", requireDb, async (req, res) => {
   }
 });
 
-app.post("/api/qr/validate", requireDb, async (req, res) => {
+app.post("/api/qr/validate", requireDb, requireRole("admin", "registrar", "operator"), async (req, res) => {
   const { ticketCode: code } = req.body;
   let cleanCode = String(code || "").trim();
 
@@ -796,7 +961,7 @@ app.post("/api/qr/validate", requireDb, async (req, res) => {
   }
 });
 
-app.get("/api/history", requireDb, async (req, res) => {
+app.get("/api/history", requireDb, requireAdmin, async (req, res) => {
   const search = searchValue(req);
   const historySearch = `%${search}%`;
 
@@ -846,6 +1011,40 @@ app.get("/api/history", requireDb, async (req, res) => {
   } catch (error) {
     console.error("History query failed:", error);
     res.status(500).json({ error: "No se pudo cargar el historial" });
+  }
+});
+
+app.get("/api/qr-tickets", requireDb, requireRole("admin", "registrar", "operator"), async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT ae.id,
+              ae.visitor_id,
+              v.full_name,
+              v.visitor_type,
+              v.document_type,
+              v.document_number,
+              v.email,
+              v.phone,
+              v.country,
+              v.city,
+              COALESCE(r.name, 'Sin servicio') AS room,
+              to_char(ae.entered_at, 'YYYY-MM-DD HH24:MI') AS entered_at,
+              ae.status,
+              t.id AS ticket_id,
+              t.ticket_code,
+              t.valid_until
+       FROM museum_access_entries ae
+       JOIN museum_visitors v ON v.id = ae.visitor_id
+       LEFT JOIN museum_rooms r ON r.id = ae.room_id
+       JOIN museum_qr_tickets t ON t.id = ae.ticket_id
+       ORDER BY ae.entered_at DESC
+       LIMIT 50`
+    );
+
+    res.json({ tickets: result.rows });
+  } catch (error) {
+    console.error("QR tickets query failed:", error);
+    res.status(500).json({ error: "No se pudieron cargar los QR" });
   }
 });
 
@@ -973,7 +1172,7 @@ app.post("/api/access-entries/:id/void", requireDb, requireAdmin, async (req, re
   }
 });
 
-app.get("/api/reports", requireDb, async (_req, res) => {
+app.get("/api/reports", requireDb, requireRole("admin", "registrar", "operator"), async (_req, res) => {
   try {
     const result = await pool.query(
       `SELECT
@@ -994,7 +1193,7 @@ app.get("/api/reports", requireDb, async (_req, res) => {
   }
 });
 
-app.get("/api/reports/accesses", requireDb, async (req, res) => {
+app.get("/api/reports/accesses", requireDb, requireRole("admin", "registrar", "operator"), async (req, res) => {
   const { from, to } = req.query;
   const fromDate = from || new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const toDate = to || new Date().toISOString().slice(0, 10);
@@ -1088,7 +1287,7 @@ app.get("/api/reports/accesses", requireDb, async (req, res) => {
   }
 });
 
-app.post("/api/audit-events", requireDb, async (req, res) => {
+app.post("/api/audit-events", requireDb, requireAuth, async (req, res) => {
   const { action, entityType, entityId, details } = req.body;
   const allowedActions = new Set(["logout"]);
 

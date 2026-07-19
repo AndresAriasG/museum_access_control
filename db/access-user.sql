@@ -1,6 +1,3 @@
-INSERT INTO museum_auth_users (username, password_hash, first_name, last_name, role)
-VALUES ('accesos@museo.gov', 'museum2026', 'Control', 'Accesos', 'registrar')
-ON CONFLICT (username) DO UPDATE
-SET is_active = true,
-    role = EXCLUDED.role,
-    updated_at = now();
+-- Los usuarios operativos deben crearse desde el modulo Usuarios o desde
+-- POST /api/access-users/init con SETUP_SECRET y una contrasena temporal segura.
+SELECT 'Usa el endpoint protegido o el modulo Usuarios para crear accesos operativos.' AS notice;

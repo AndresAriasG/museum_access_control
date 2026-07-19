@@ -87,9 +87,7 @@ async function api(path, options = {}) {
 
 function authHeaders(user) {
   return {
-    'X-User-Id': user?.id || '',
-    'X-Username': user?.username || '',
-    'X-User-Role': user?.role || ''
+    Authorization: user?.token ? `Bearer ${user.token}` : ''
   };
 }
 
@@ -653,7 +651,7 @@ function EntryModule({ rooms, user, onSaved }) {
       const data = await api('/api/entries', {
         method: 'POST',
         headers: authHeaders(user),
-        body: JSON.stringify({ ...form, validatedBy: user?.id })
+        body: JSON.stringify(form)
       });
       setMessage(`Entrada registrada. QR: ${data.ticket.ticket_code}`);
       setGeneratedTicket({
@@ -769,7 +767,7 @@ function EntryModule({ rooms, user, onSaved }) {
         const data = await api('/api/entries', {
           method: 'POST',
           headers: authHeaders(user),
-          body: JSON.stringify({ ...row, validatedBy: user?.id })
+          body: JSON.stringify(row)
         });
         nextRows[index] = { ...row, status: 'saved', message: data.ticket.ticket_code };
         saved += 1;
@@ -1919,6 +1917,7 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [dashboard, setDashboard] = useState(emptyDashboard);
   const [history, setHistory] = useState([]);
+  const [qrTickets, setQrTickets] = useState([]);
   const [reports, setReports] = useState({});
   const [accessReport, setAccessReport] = useState(emptyAccessReport);
   const [reportRange, setReportRange] = useState({ from: weekAgo, to: today });
@@ -1929,20 +1928,25 @@ function App() {
 
   async function loadAccessReport(range = reportRange) {
     const params = new URLSearchParams({ from: range.from, to: range.to });
-    const data = await api(`/api/reports/accesses?${params.toString()}`);
+    const data = await api(`/api/reports/accesses?${params.toString()}`, { headers: authHeaders(user) });
     setAccessReport(data);
   }
 
   async function loadData() {
     setError('');
     try {
-      const [dashboardData, historyData, reportData] = await Promise.all([
-        api(withSearch('/api/dashboard', searchQuery)),
-        api(withSearch('/api/history', searchQuery)),
-        api('/api/reports')
+      const historyRequest = user?.role === 'admin'
+        ? api(withSearch('/api/history', searchQuery), { headers: authHeaders(user) })
+        : Promise.resolve({ history: [] });
+      const [dashboardData, historyData, qrData, reportData] = await Promise.all([
+        api(withSearch('/api/dashboard', searchQuery), { headers: authHeaders(user) }),
+        historyRequest,
+        api('/api/qr-tickets', { headers: authHeaders(user) }),
+        api('/api/reports', { headers: authHeaders(user) })
       ]);
       setDashboard(dashboardData);
       setHistory(historyData.history || []);
+      setQrTickets(qrData.tickets || []);
       setReports(reportData.reports || {});
       await loadAccessReport();
     } catch (err) {
@@ -2010,6 +2014,7 @@ function App() {
     setNotificationsOpen(false);
     setDashboard(emptyDashboard);
     setHistory([]);
+    setQrTickets([]);
     setReports({});
     setAccessReport(emptyAccessReport);
     setError('');
@@ -2052,7 +2057,7 @@ function App() {
     if (active === 'validar_qr') {
       return <QrValidationModule user={user} initialCode={pendingQrCode} onInitialCodeUsed={consumePendingQrCode} />;
     }
-    if (active === 'qr') return <QrModule history={history} />;
+    if (active === 'qr') return <QrModule history={qrTickets} />;
     if (active === 'historial') {
       return (
         <HistoryModule
@@ -2081,7 +2086,7 @@ function App() {
     }
     if (active === 'auditoria') return <AuditModule user={user} />;
     return <Dashboard data={filteredDashboard} />;
-  }, [active, dashboard, history, reports, user, searchQuery, searchDraft, accessReport, reportRange, notifications]);
+  }, [active, dashboard, history, qrTickets, reports, user, searchQuery, searchDraft, accessReport, reportRange, notifications]);
 
   if (!user) return <Login onLogin={setUser} />;
 

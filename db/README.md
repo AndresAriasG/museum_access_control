@@ -56,16 +56,8 @@ SET role = 'registrar',
     updated_at = now()
 WHERE role = 'operator';
 
-INSERT INTO museum_auth_users (username, password_hash, first_name, last_name, role, is_active)
-VALUES
-  ('admin@museo.gov', 'museum2026', 'Administrador', 'Museo', 'admin', true),
-  ('accesos@museo.gov', 'museum2026', 'Control', 'Accesos', 'registrar', true)
-ON CONFLICT (username) DO UPDATE
-SET role = EXCLUDED.role,
-    first_name = EXCLUDED.first_name,
-    last_name = EXCLUDED.last_name,
-    is_active = true,
-    updated_at = now();
+-- Los usuarios se crean desde el modulo Usuarios o desde el endpoint protegido
+-- POST /api/access-users/init con SETUP_SECRET.
 
 ALTER TABLE museum_auth_users
   ALTER COLUMN role SET DEFAULT 'registrar';
@@ -198,16 +190,6 @@ SET is_active = true;
 
 ## Usuario inicial
 
-```text
-Usuario: admin@museo.gov
-Password: museum2026
-```
+No se dejan contrasenas por defecto en los scripts SQL. Crea el primer administrador con el endpoint protegido `POST /api/access-users/init`, usando `SETUP_SECRET` y una contrasena temporal segura. Luego administra usuarios desde la interfaz.
 
-Usuario operativo:
-
-```text
-Usuario: accesos@museo.gov
-Password: museum2026
-```
-
-La columna se llama `password_hash` para dejar listo el cambio a bcrypt/JWT, pero el MVP conserva comparacion directa para coincidir con el backend existente.
+La columna `password_hash` guarda hashes `scrypt`. Los usuarios antiguos con contrasena en texto se migran automaticamente al primer login exitoso.

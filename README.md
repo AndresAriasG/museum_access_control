@@ -30,12 +30,7 @@ npm run db:seed
 
 Ver mas detalles en `db/README.md`.
 
-Usuario operativo para validar entradas:
-
-```text
-accesos@museo.gov
-museum2026
-```
+Los usuarios operativos se crean desde el modulo `Usuarios` con un administrador. El endpoint de inicializacion requiere `SETUP_SECRET` y debe usarse solo de forma controlada.
 
 ## API conectada
 
@@ -55,6 +50,7 @@ museum2026
 - `GET /api/history`
 - `GET /api/reports`
 - `GET /api/reports/accesses`
+- `GET /api/qr-tickets`
 - `GET /api/audit-logs`
 - `POST /api/audit-events`
 - `POST /api/access-users/init`
@@ -82,4 +78,8 @@ El archivo `railway.json` define:
 Variables requeridas:
 
 - `DATABASE_URL`
+- `APP_SECRET`
+- `SETUP_SECRET`
 - `NODE_ENV=production`
+
+Ver tambien `SECURITY.md` y `OPERATIONS.md` para sesiones, roles, auditoria, QR y despliegue.
