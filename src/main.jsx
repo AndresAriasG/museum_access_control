@@ -41,7 +41,7 @@ const navItems = [
   { id: 'salas', label: 'Servicios', icon: Gauge, roles: ['admin'] },
   { id: 'usuarios', label: 'Usuarios', icon: UserRound, roles: ['admin'] },
   { id: 'validar_qr', label: 'Validar QR', icon: TicketCheck, roles: ['admin', 'registrar', 'operator'] },
-  { id: 'qr', label: 'QR generados', icon: QrCode, roles: ['admin'] },
+  { id: 'qr', label: 'QR generados', icon: QrCode, roles: ['admin', 'registrar', 'operator'] },
   { id: 'historial', label: 'Historial', icon: History, roles: ['admin'] },
   { id: 'reportes', label: 'Reportes', icon: BarChart3, roles: ['admin', 'registrar', 'operator'] },
   { id: 'auditoria', label: 'Auditoria', icon: ShieldCheck, roles: ['admin'] }

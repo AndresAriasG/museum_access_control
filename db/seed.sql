@@ -3,7 +3,7 @@ BEGIN;
 INSERT INTO museum_role_profiles (code, name, description, allowed_modules)
 VALUES
   ('admin', 'Administrador', 'Acceso completo a administracion, reportes, servicios, usuarios y registros.', '["dashboard","entrada","salas","usuarios","validar_qr","qr","historial","reportes","auditoria"]'::jsonb),
-  ('registrar', 'Registro', 'Registra visitantes, valida QR y consulta indicadores operativos.', '["dashboard","entrada","validar_qr","reportes"]'::jsonb)
+  ('registrar', 'Registro', 'Registra visitantes, valida QR, consulta QR generados y revisa indicadores operativos.', '["dashboard","entrada","validar_qr","qr","reportes"]'::jsonb)
 ON CONFLICT (code) DO UPDATE
 SET name = EXCLUDED.name,
     description = EXCLUDED.description,

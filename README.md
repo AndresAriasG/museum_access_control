@@ -61,7 +61,7 @@ museum2026
 
 Los visitantes guardan tipo de documento, documento, telefono, pais y ciudad en `museum_visitors`.
 Los servicios se administran desde el modulo `Servicios` y se guardan en `museum_rooms`.
-Los usuarios se separan por perfiles en `museum_role_profiles`: `admin` tiene todos los modulos y `registrar` ve Dashboard, Registrar Entrada, Validar QR y Reportes.
+Los usuarios se separan por perfiles en `museum_role_profiles`: `admin` tiene todos los modulos y `registrar` ve Dashboard, Registrar Entrada, Validar QR, QR generados y Reportes.
 El modulo `Auditoria` solo esta disponible para administradores y muestra acciones relevantes hechas por los usuarios.
 La busqueda global se aplica con boton `Buscar` y filtra visitantes, servicios, QR, ciudad, pais, tipo, fecha y estado.
 La campana muestra alertas operativas como servicios pendientes o visitantes dentro.
@@ -69,7 +69,7 @@ El modulo `Historial` tiene una busqueda propia visible y permite exportar los i
 El modulo `Reportes` permite filtrar accesos por rango de fechas, ver rankings y exportar CSV.
 El dashboard muestra primero ingresos por dia y debajo el detalle por hora con etiquetas visibles.
 El registro valida que el nombre tenga solo letras y que el email tenga formato de correo.
-Cada registro de entrada genera un QR por persona, relacionado con `ticketId`, `ticketCode` y `entryId`, valido por 3 horas; el modulo `Validar QR` permite verificar vigencia y el modulo `QR generados` muestra una lista administrativa para imprimir los ultimos codigos emitidos.
+Cada registro de entrada genera un QR por persona, relacionado con `ticketId`, `ticketCode` y `entryId`, valido por 3 horas; el modulo `Validar QR` permite verificar vigencia y el modulo `QR generados` permite consultar o imprimir los ultimos codigos emitidos.
 
 ## Railway
 

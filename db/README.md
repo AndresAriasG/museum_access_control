@@ -42,8 +42,8 @@ CREATE TABLE IF NOT EXISTS museum_role_profiles (
 INSERT INTO museum_role_profiles (code, name, description, allowed_modules)
 VALUES
   ('admin', 'Administrador', 'Acceso completo a administracion, reportes, servicios, usuarios y registros.', '["dashboard","entrada","salas","usuarios","validar_qr","qr","historial","reportes","auditoria"]'::jsonb),
-  ('registrar', 'Registro', 'Registra visitantes, valida QR y consulta indicadores operativos.', '["dashboard","entrada","validar_qr","reportes"]'::jsonb),
-  ('operator', 'Registro', 'Perfil legado compatible con usuarios operativos existentes.', '["dashboard","entrada","validar_qr","reportes"]'::jsonb)
+  ('registrar', 'Registro', 'Registra visitantes, valida QR, consulta QR generados y revisa indicadores operativos.', '["dashboard","entrada","validar_qr","qr","reportes"]'::jsonb),
+  ('operator', 'Registro', 'Perfil legado compatible con usuarios operativos existentes.', '["dashboard","entrada","validar_qr","qr","reportes"]'::jsonb)
 ON CONFLICT (code) DO UPDATE
 SET name = EXCLUDED.name,
     description = EXCLUDED.description,
@@ -89,12 +89,12 @@ ALTER TABLE museum_auth_users
   VALIDATE CONSTRAINT museum_auth_users_role_fkey;
 ```
 
-Para limitar el perfil de registro a Dashboard, Registrar Entrada, Validar QR y Reportes:
+Para limitar el perfil de registro a Dashboard, Registrar Entrada, Validar QR, QR generados y Reportes:
 
 ```sql
 UPDATE museum_role_profiles
-SET description = 'Registra visitantes, valida QR y consulta indicadores operativos.',
-    allowed_modules = '["dashboard","entrada","validar_qr","reportes"]'::jsonb,
+SET description = 'Registra visitantes, valida QR, consulta QR generados y revisa indicadores operativos.',
+    allowed_modules = '["dashboard","entrada","validar_qr","qr","reportes"]'::jsonb,
     updated_at = now()
 WHERE code IN ('registrar', 'operator');
 ```
@@ -108,8 +108,8 @@ SET allowed_modules = '["dashboard","entrada","salas","usuarios","validar_qr","q
 WHERE code = 'admin';
 
 UPDATE museum_role_profiles
-SET description = 'Registra visitantes, valida QR y consulta indicadores operativos.',
-    allowed_modules = '["dashboard","entrada","validar_qr","reportes"]'::jsonb,
+SET description = 'Registra visitantes, valida QR, consulta QR generados y revisa indicadores operativos.',
+    allowed_modules = '["dashboard","entrada","validar_qr","qr","reportes"]'::jsonb,
     updated_at = now()
 WHERE code IN ('registrar', 'operator');
 
