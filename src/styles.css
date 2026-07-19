@@ -899,12 +899,18 @@ select,
 }
 
 .qr-video {
+  display: none;
   width: 100%;
+  min-height: 240px;
   max-height: 320px;
   border-radius: 14px;
   border: 1px solid var(--line);
   background: #071014;
   object-fit: cover;
+}
+
+.qr-video.is-active {
+  display: block;
 }
 
 .qr-canvas {

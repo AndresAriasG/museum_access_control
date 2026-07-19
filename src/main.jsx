@@ -864,6 +864,23 @@ function loadJsQr() {
   });
 }
 
+function nextFrame() {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+}
+
+async function openCameraStream() {
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+  } catch (_error) {
+    return navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  }
+}
+
 function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
   const [code, setCode] = useState('');
   const [result, setResult] = useState(null);
@@ -884,6 +901,10 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
     }
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.srcObject = null;
+    }
     setScanning(false);
   }
 
@@ -915,14 +936,18 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
 
     try {
       setMessage('');
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      streamRef.current = stream;
       scannerActiveRef.current = true;
       setScanning(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+      await nextFrame();
+
+      const stream = await openCameraStream();
+      streamRef.current = stream;
+      if (!videoRef.current) {
+        throw new Error('Video element is not ready');
       }
+      videoRef.current.srcObject = stream;
+      videoRef.current.setAttribute('playsinline', 'true');
+      await videoRef.current.play();
 
       if ('BarcodeDetector' in window) {
         const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
@@ -946,7 +971,7 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
       const scanWithCanvas = () => {
         if (!scannerActiveRef.current || !videoRef.current || !canvasRef.current || !streamRef.current) return;
         const video = videoRef.current;
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0 && video.videoHeight > 0) {
           const canvas = canvasRef.current;
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
@@ -966,7 +991,7 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
       scanWithCanvas();
     } catch (_error) {
       stopScanner();
-      setMessage('No se pudo leer el QR con camara. Verifica permisos de camara o pega el codigo manualmente.');
+      setMessage('No se pudo abrir o leer la camara. Revisa permisos de camara, buena luz y que la pagina este en HTTPS.');
     }
   }
 
@@ -1010,7 +1035,7 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
               {scanning ? 'Detener camara' : 'Escanear con camara'}
             </button>
           </div>
-          {scanning && <video className="qr-video" ref={videoRef} muted playsInline />}
+          <video className={`qr-video ${scanning ? 'is-active' : ''}`} ref={videoRef} muted playsInline autoPlay />
           <canvas className="qr-canvas" ref={canvasRef} aria-hidden="true" />
         </form>
       </div>
