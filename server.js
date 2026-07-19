@@ -32,12 +32,26 @@ function searchValue(req) {
   return String(req.query.search || "").trim();
 }
 
-const DOCUMENT_TYPES = new Set([
+const DOCUMENT_TYPES = [
   "Cedula de ciudadania",
   "Pasaporte",
   "Tarjeta de identidad",
   "Cedula de extranjeria"
-]);
+];
+
+function normalizeText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function normalizeDocumentType(value) {
+  const normalizedValue = normalizeText(value);
+  return DOCUMENT_TYPES.find((type) => normalizeText(type) === normalizedValue) || "";
+}
 
 function requireAdmin(req, res, next) {
   if (req.headers["x-user-role"] !== "admin") {
@@ -597,7 +611,8 @@ app.get("/api/dashboard", requireDb, async (req, res) => {
 app.post("/api/entries", requireDb, async (req, res) => {
   const { fullName, documentType, documentNumber, visitorType, email, phone, country, city, roomId, validatedBy } = req.body;
   const cleanName = String(fullName || "").trim();
-  const cleanDocumentType = String(documentType || "").trim();
+  const cleanDocumentType = normalizeDocumentType(documentType);
+  const rawDocumentType = String(documentType || "").trim();
   const cleanEmail = String(email || "").trim();
   const cleanPhone = String(phone || "").trim();
   const cleanDocumentNumber = String(documentNumber || "").trim();
@@ -606,7 +621,7 @@ app.post("/api/entries", requireDb, async (req, res) => {
   const cleanCity = String(city || "").trim();
   const requiredFields = [
     ["Nombre", cleanName],
-    ["Tipo de documento", cleanDocumentType],
+    ["Tipo de documento", rawDocumentType],
     ["Documento", cleanDocumentNumber],
     ["Pais", cleanCountry],
     ["Ciudad", cleanCity],
@@ -624,7 +639,7 @@ app.post("/api/entries", requireDb, async (req, res) => {
     return res.status(400).json({ error: "El nombre solo debe contener letras y espacios" });
   }
 
-  if (!DOCUMENT_TYPES.has(cleanDocumentType)) {
+  if (!cleanDocumentType) {
     return res.status(400).json({ error: "Selecciona un tipo de documento valido" });
   }
 
