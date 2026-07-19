@@ -1212,6 +1212,15 @@ mark {
   padding: 18px;
 }
 
+.reports-view {
+  align-items: stretch;
+}
+
+.reports-summary-panel,
+.reports-view > .panel.full {
+  grid-column: 1 / -1;
+}
+
 .report-card svg:first-child {
   color: var(--cyan);
 }
@@ -1233,10 +1242,15 @@ mark {
 
 .report-filters {
   display: grid;
-  grid-template-columns: repeat(2, minmax(160px, 220px)) auto;
+  grid-template-columns: repeat(2, minmax(180px, 260px)) minmax(140px, 180px);
   align-items: end;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.report-refresh-btn {
+  width: auto;
+  min-width: 140px;
 }
 
 .report-filters label {

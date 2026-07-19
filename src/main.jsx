@@ -1584,7 +1584,7 @@ function ReportsModule({ data, reports, accessReport, reportRange, onRangeChange
   const summary = accessReport.summary || {};
 
   return (
-    <section className="view-grid">
+    <section className="view-grid reports-view">
       {cards.map((report) => {
         const ReportIcon = report.icon;
         return (
@@ -1596,7 +1596,7 @@ function ReportsModule({ data, reports, accessReport, reportRange, onRangeChange
           </article>
         );
       })}
-      <section className="panel glass wide">
+      <section className="panel glass full reports-summary-panel">
         <div className="panel-head">
           <div>
             <p className="eyebrow">Reportes ejecutivos</p>
@@ -1628,7 +1628,7 @@ function ReportsModule({ data, reports, accessReport, reportRange, onRangeChange
             Hasta
             <input type="date" value={reportRange.to} onChange={(event) => onRangeChange({ ...reportRange, to: event.target.value })} />
           </label>
-          <button className="ghost-btn" type="button" onClick={onRefreshReport}>Actualizar</button>
+          <button className="ghost-btn report-refresh-btn" type="button" onClick={onRefreshReport}>Actualizar</button>
         </div>
         <div className="insight-grid report-summary">
           <div><strong>{summary.total_entries || 0}</strong><span>Accesos del rango</span></div>
