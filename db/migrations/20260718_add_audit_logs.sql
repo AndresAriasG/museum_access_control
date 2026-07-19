@@ -24,6 +24,6 @@ CREATE INDEX IF NOT EXISTS idx_museum_audit_logs_action
   ON museum_audit_logs (action);
 
 UPDATE museum_role_profiles
-SET allowed_modules = '["dashboard","entrada","salas","usuarios","qr","historial","reportes","auditoria"]'::jsonb,
+SET allowed_modules = '["dashboard","entrada","salas","usuarios","validar_qr","qr","historial","reportes","auditoria"]'::jsonb,
     updated_at = now()
 WHERE code = 'admin';

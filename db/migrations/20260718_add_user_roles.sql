@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS museum_role_profiles (
 
 INSERT INTO museum_role_profiles (code, name, description, allowed_modules)
 VALUES
-  ('admin', 'Administrador', 'Acceso completo a administracion, reportes, servicios, usuarios y registros.', '["dashboard","entrada","salas","usuarios","qr","historial","reportes","auditoria"]'::jsonb),
-  ('registrar', 'Registro', 'Registra visitantes y consulta indicadores operativos.', '["dashboard","entrada","reportes"]'::jsonb),
-  ('operator', 'Registro', 'Perfil legado compatible con usuarios operativos existentes.', '["dashboard","entrada","reportes"]'::jsonb)
+  ('admin', 'Administrador', 'Acceso completo a administracion, reportes, servicios, usuarios y registros.', '["dashboard","entrada","salas","usuarios","validar_qr","qr","historial","reportes","auditoria"]'::jsonb),
+  ('registrar', 'Registro', 'Registra visitantes, valida QR y consulta indicadores operativos.', '["dashboard","entrada","validar_qr","reportes"]'::jsonb),
+  ('operator', 'Registro', 'Perfil legado compatible con usuarios operativos existentes.', '["dashboard","entrada","validar_qr","reportes"]'::jsonb)
 ON CONFLICT (code) DO UPDATE
 SET name = EXCLUDED.name,
     description = EXCLUDED.description,

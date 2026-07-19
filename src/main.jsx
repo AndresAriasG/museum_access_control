@@ -40,6 +40,7 @@ const navItems = [
   { id: 'entrada', label: 'Registrar Entrada', icon: DoorOpen, roles: ['admin', 'registrar', 'operator'] },
   { id: 'salas', label: 'Servicios', icon: Gauge, roles: ['admin'] },
   { id: 'usuarios', label: 'Usuarios', icon: UserRound, roles: ['admin'] },
+  { id: 'validar_qr', label: 'Validar QR', icon: TicketCheck, roles: ['admin', 'registrar', 'operator'] },
   { id: 'qr', label: 'QR generados', icon: QrCode, roles: ['admin'] },
   { id: 'historial', label: 'Historial', icon: History, roles: ['admin'] },
   { id: 'reportes', label: 'Reportes', icon: BarChart3, roles: ['admin', 'registrar', 'operator'] },
@@ -155,7 +156,8 @@ function qrPayload(ticket) {
     documentType: ticket.documentType || ticket.document_type,
     documentNumber: ticket.documentNumber || ticket.document_number,
     phone: ticket.phone,
-    issuedAt: ticket.entered_at || ticket.issuedAt
+    issuedAt: ticket.entered_at || ticket.issuedAt,
+    validUntil: ticket.validUntil || ticket.valid_until
   });
 }
 
@@ -165,6 +167,7 @@ async function printQr(ticket) {
   const documentType = ticket.documentType || ticket.document_type || '';
   const documentNumber = ticket.documentNumber || ticket.document_number || '';
   const phone = ticket.phone || '';
+  const validUntil = ticket.validUntil || ticket.valid_until || '';
   const payload = qrPayload(ticket);
   const qrSrc = await QRCode.toDataURL(payload, {
     width: 260,
@@ -195,6 +198,7 @@ async function printQr(ticket) {
           <p>${[documentType, documentNumber].filter(Boolean).join(': ')}</p>
           <p>${phone}</p>
           <p>${ticket.room || ''}</p>
+          <p>Valido hasta: ${validUntil || '3 horas desde emision'}</p>
         </main>
         <script>window.onload = () => { window.print(); window.close(); };</script>
       </body>
@@ -551,7 +555,8 @@ function EntryModule({ rooms, user, onSaved }) {
         documentType: data.visitor.document_type,
         documentNumber: data.visitor.document_number,
         phone: data.visitor.phone,
-        issuedAt: data.entry.entered_at
+        issuedAt: data.entry.entered_at,
+        validUntil: data.ticket.valid_until
       });
       setForm({
         fullName: '',
@@ -809,6 +814,144 @@ function QrModule({ history }) {
             <button className="ghost-btn" type="button" onClick={() => printQr(item)}>Imprimir QR</button>
           </article>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function extractTicketCode(value) {
+  const clean = String(value || '').trim();
+  if (!clean) return '';
+  if (!clean.startsWith('{')) return clean;
+  try {
+    const payload = JSON.parse(clean);
+    return payload.ticketCode || payload.code || '';
+  } catch (_error) {
+    return clean;
+  }
+}
+
+function QrValidationModule({ user }) {
+  const [code, setCode] = useState('');
+  const [result, setResult] = useState(null);
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const videoRef = React.useRef(null);
+  const streamRef = React.useRef(null);
+
+  function stopScanner() {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setScanning(false);
+  }
+
+  async function validate(nextCode = code) {
+    const ticketCode = extractTicketCode(nextCode);
+    setLoading(true);
+    setMessage('');
+    setResult(null);
+    try {
+      const data = await api('/api/qr/validate', {
+        method: 'POST',
+        headers: authHeaders(user),
+        body: JSON.stringify({ ticketCode })
+      });
+      setResult(data);
+      setMessage(data.approved ? 'QR valido para ingreso.' : 'QR vencido o no disponible.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function startScanner() {
+    if (!('BarcodeDetector' in window)) {
+      setMessage('Este navegador no permite lectura directa de QR. Puedes pegar el codigo manualmente.');
+      return;
+    }
+
+    try {
+      setMessage('');
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      streamRef.current = stream;
+      setScanning(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+      let active = true;
+      const scan = async () => {
+        if (!active || !videoRef.current || !streamRef.current) return;
+        const codes = await detector.detect(videoRef.current).catch(() => []);
+        if (codes.length > 0) {
+          const rawValue = codes[0].rawValue || '';
+          setCode(rawValue);
+          active = false;
+          stopScanner();
+          validate(rawValue);
+          return;
+        }
+        window.requestAnimationFrame(scan);
+      };
+      scan();
+    } catch (_error) {
+      stopScanner();
+      setMessage('No se pudo abrir la camara. Puedes pegar el codigo manualmente.');
+    }
+  }
+
+  useEffect(() => () => stopScanner(), []);
+
+  const ticket = result?.ticket;
+
+  return (
+    <section className="module-layout">
+      <div className="panel glass">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Control de ingreso</p>
+            <h3>Validar QR</h3>
+          </div>
+        </div>
+        <form className="stack-form" onSubmit={(event) => { event.preventDefault(); validate(); }}>
+          <textarea
+            required
+            rows="5"
+            placeholder="Pega aqui el codigo o el contenido del QR"
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+          />
+          {message && <p className={`form-message ${result?.approved === false ? 'error' : ''}`}>{message}</p>}
+          <div className="row-actions">
+            <button className="primary-btn" type="submit" disabled={loading}>
+              <TicketCheck size={18} />
+              {loading ? 'Validando...' : 'Validar ingreso'}
+            </button>
+            <button className="ghost-btn" type="button" onClick={scanning ? stopScanner : startScanner}>
+              <QrCode size={17} />
+              {scanning ? 'Detener camara' : 'Leer con camara'}
+            </button>
+          </div>
+          {scanning && <video className="qr-video" ref={videoRef} muted playsInline />}
+        </form>
+      </div>
+      <div className={`panel glass accent-panel ${result ? (result.approved ? 'qr-approved' : 'qr-rejected') : ''}`}>
+        <ShieldCheck size={34} />
+        <h3>{result ? (result.approved ? 'Ingreso aprobado' : 'Ingreso rechazado') : 'Esperando lectura'}</h3>
+        <p>{result ? 'Verifica la informacion antes de permitir el acceso.' : 'El QR tiene vigencia de 3 horas desde su emision.'}</p>
+        {ticket && (
+          <>
+            <div className="metric-line"><span>Visitante</span><strong>{ticket.full_name || 'Sin nombre'}</strong></div>
+            <div className="metric-line"><span>Documento</span><strong>{[ticket.document_type, ticket.document_number].filter(Boolean).join(': ') || 'Sin documento'}</strong></div>
+            <div className="metric-line"><span>Codigo</span><strong>{ticket.ticket_code}</strong></div>
+            <div className="metric-line"><span>Valido hasta</span><strong>{ticket.valid_until}</strong></div>
+            <div className="metric-line"><span>Estado</span><strong>{ticket.status}</strong></div>
+          </>
+        )}
       </div>
     </section>
   );
@@ -1398,6 +1541,7 @@ function App() {
     if (active === 'entrada') return <EntryModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
     if (active === 'salas') return <RoomsModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
     if (active === 'usuarios') return <UsersModule user={user} />;
+    if (active === 'validar_qr') return <QrValidationModule user={user} />;
     if (active === 'qr') return <QrModule history={history} />;
     if (active === 'historial') {
       return (

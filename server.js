@@ -648,7 +648,7 @@ app.post("/api/entries", requireDb, async (req, res) => {
 
     const ticket = await client.query(
       `INSERT INTO museum_qr_tickets (ticket_code, visitor_id, valid_until, status, signature)
-       VALUES ($1, $2, now() + interval '8 hours', 'active', 'QR-SHA256')
+       VALUES ($1, $2, now() + interval '3 hours', 'active', 'QR-SHA256')
        RETURNING id, ticket_code, valid_until, status`,
       [ticketCode(), visitor.rows[0].id]
     );
@@ -690,8 +690,18 @@ app.post("/api/entries", requireDb, async (req, res) => {
 
 app.post("/api/qr/validate", requireDb, async (req, res) => {
   const { ticketCode: code } = req.body;
+  let cleanCode = String(code || "").trim();
 
-  if (!code) {
+  if (cleanCode.startsWith("{")) {
+    try {
+      const payload = JSON.parse(cleanCode);
+      cleanCode = String(payload.ticketCode || payload.code || "").trim();
+    } catch (_error) {
+      return res.status(400).json({ error: "El QR no tiene un formato valido" });
+    }
+  }
+
+  if (!cleanCode) {
     return res.status(400).json({ error: "Codigo QR obligatorio" });
   }
 
@@ -712,27 +722,38 @@ app.post("/api/qr/validate", requireDb, async (req, res) => {
        FROM museum_qr_tickets t
        LEFT JOIN museum_visitors v ON v.id = t.visitor_id
        WHERE t.ticket_code = $1`,
-      [code.trim().toUpperCase()]
+      [cleanCode.toUpperCase()]
     );
 
     if (result.rows.length === 0) {
       await auditLog(pool, req, "qr_validation_not_found", "qr_ticket", null, {
-        ticketCode: code.trim().toUpperCase()
+        ticketCode: cleanCode.toUpperCase()
       });
       return res.status(404).json({ error: "Ticket no encontrado" });
     }
 
     const ticket = result.rows[0];
     const approved = ticket.status === "active" && new Date(ticket.valid_until) >= new Date();
+    const nextStatus = approved ? ticket.status : "expired";
+
+    if (!approved && ticket.status === "active") {
+      await pool.query(
+        `UPDATE museum_qr_tickets
+         SET status = 'expired'
+         WHERE id = $1`,
+        [ticket.id]
+      );
+      ticket.status = nextStatus;
+    }
 
     await auditLog(pool, req, approved ? "qr_validation_approved" : "qr_validation_rejected", "qr_ticket", ticket.id, {
       ticketCode: ticket.ticket_code,
       visitorName: ticket.full_name,
-      status: ticket.status,
+      status: nextStatus,
       validUntil: ticket.valid_until
     });
 
-    res.json({ approved, ticket });
+    res.json({ approved, ticket: { ...ticket, status: nextStatus } });
   } catch (error) {
     console.error("QR validation failed:", error);
     res.status(500).json({ error: "No se pudo validar el QR" });

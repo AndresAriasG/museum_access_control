@@ -41,9 +41,9 @@ CREATE TABLE IF NOT EXISTS museum_role_profiles (
 
 INSERT INTO museum_role_profiles (code, name, description, allowed_modules)
 VALUES
-  ('admin', 'Administrador', 'Acceso completo a administracion, reportes, servicios, usuarios y registros.', '["dashboard","entrada","salas","usuarios","qr","historial","reportes","auditoria"]'::jsonb),
-  ('registrar', 'Registro', 'Registra visitantes y consulta indicadores operativos.', '["dashboard","entrada","reportes"]'::jsonb),
-  ('operator', 'Registro', 'Perfil legado compatible con usuarios operativos existentes.', '["dashboard","entrada","reportes"]'::jsonb)
+  ('admin', 'Administrador', 'Acceso completo a administracion, reportes, servicios, usuarios y registros.', '["dashboard","entrada","salas","usuarios","validar_qr","qr","historial","reportes","auditoria"]'::jsonb),
+  ('registrar', 'Registro', 'Registra visitantes, valida QR y consulta indicadores operativos.', '["dashboard","entrada","validar_qr","reportes"]'::jsonb),
+  ('operator', 'Registro', 'Perfil legado compatible con usuarios operativos existentes.', '["dashboard","entrada","validar_qr","reportes"]'::jsonb)
 ON CONFLICT (code) DO UPDATE
 SET name = EXCLUDED.name,
     description = EXCLUDED.description,
@@ -89,14 +89,33 @@ ALTER TABLE museum_auth_users
   VALIDATE CONSTRAINT museum_auth_users_role_fkey;
 ```
 
-Para limitar el perfil de registro a Dashboard, Registrar Entrada y Reportes:
+Para limitar el perfil de registro a Dashboard, Registrar Entrada, Validar QR y Reportes:
 
 ```sql
 UPDATE museum_role_profiles
-SET description = 'Registra visitantes y consulta indicadores operativos.',
-    allowed_modules = '["dashboard","entrada","reportes"]'::jsonb,
+SET description = 'Registra visitantes, valida QR y consulta indicadores operativos.',
+    allowed_modules = '["dashboard","entrada","validar_qr","reportes"]'::jsonb,
     updated_at = now()
 WHERE code IN ('registrar', 'operator');
+```
+
+Para habilitar el modulo Validar QR y limitar los QR activos a maximo 3 horas:
+
+```sql
+UPDATE museum_role_profiles
+SET allowed_modules = '["dashboard","entrada","salas","usuarios","validar_qr","qr","historial","reportes","auditoria"]'::jsonb,
+    updated_at = now()
+WHERE code = 'admin';
+
+UPDATE museum_role_profiles
+SET description = 'Registra visitantes, valida QR y consulta indicadores operativos.',
+    allowed_modules = '["dashboard","entrada","validar_qr","reportes"]'::jsonb,
+    updated_at = now()
+WHERE code IN ('registrar', 'operator');
+
+UPDATE museum_qr_tickets
+SET valid_until = LEAST(valid_until, valid_from + interval '3 hours')
+WHERE status = 'active';
 ```
 
 Para agregar la bitacora de auditoria visible solo para administradores:
@@ -128,7 +147,7 @@ CREATE INDEX IF NOT EXISTS idx_museum_audit_logs_action
   ON museum_audit_logs (action);
 
 UPDATE museum_role_profiles
-SET allowed_modules = '["dashboard","entrada","salas","usuarios","qr","historial","reportes","auditoria"]'::jsonb,
+SET allowed_modules = '["dashboard","entrada","salas","usuarios","validar_qr","qr","historial","reportes","auditoria"]'::jsonb,
     updated_at = now()
 WHERE code = 'admin';
 ```
