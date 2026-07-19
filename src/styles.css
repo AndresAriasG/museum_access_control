@@ -907,6 +907,10 @@ select,
   object-fit: cover;
 }
 
+.qr-canvas {
+  display: none;
+}
+
 .qr-helper {
   margin: 0;
   border-radius: 12px;

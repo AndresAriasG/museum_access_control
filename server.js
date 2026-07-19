@@ -608,6 +608,8 @@ app.post("/api/entries", requireDb, async (req, res) => {
     ["Nombre", cleanName],
     ["Tipo de documento", cleanDocumentType],
     ["Documento", cleanDocumentNumber],
+    ["Pais", cleanCountry],
+    ["Ciudad", cleanCity],
     ["Servicio", roomId]
   ];
   const missingFields = requiredFields

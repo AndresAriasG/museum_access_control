@@ -623,8 +623,8 @@ function EntryModule({ rooms, user, onSaved }) {
             onChange={(event) => setForm({ ...form, phone: event.target.value })}
           />
           <div className="form-grid">
-            <input placeholder="Pais opcional" value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value })} />
-            <input placeholder="Ciudad opcional" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
+            <input required placeholder="Pais" value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value })} />
+            <input required placeholder="Ciudad" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
           </div>
           <select required value={form.roomId} onChange={(event) => setForm({ ...form, roomId: event.target.value })}>
             <option value="" disabled>Selecciona un servicio</option>
@@ -843,6 +843,27 @@ function extractTicketCode(value) {
   }
 }
 
+function loadJsQr() {
+  if (window.jsQR) return Promise.resolve(window.jsQR);
+  const existingScript = document.getElementById('jsqr-loader');
+  if (existingScript) {
+    return new Promise((resolve, reject) => {
+      existingScript.addEventListener('load', () => resolve(window.jsQR), { once: true });
+      existingScript.addEventListener('error', reject, { once: true });
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.id = 'jsqr-loader';
+    script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
+    script.async = true;
+    script.onload = () => resolve(window.jsQR);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
 function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
   const [code, setCode] = useState('');
   const [result, setResult] = useState(null);
@@ -850,12 +871,17 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const videoRef = React.useRef(null);
+  const canvasRef = React.useRef(null);
   const streamRef = React.useRef(null);
-  const scannerSupported = typeof window !== 'undefined'
-    && 'BarcodeDetector' in window
-    && Boolean(navigator.mediaDevices?.getUserMedia);
+  const scannerFrameRef = React.useRef(null);
+  const scannerActiveRef = React.useRef(false);
 
   function stopScanner() {
+    scannerActiveRef.current = false;
+    if (scannerFrameRef.current) {
+      window.cancelAnimationFrame(scannerFrameRef.current);
+      scannerFrameRef.current = null;
+    }
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     setScanning(false);
@@ -882,8 +908,8 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
   }
 
   async function startScanner() {
-    if (!scannerSupported) {
-      setMessage('Usa la camara nativa del celular sobre el QR impreso o pega el codigo manualmente.');
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMessage('No se pudo abrir la camara en este navegador. Pega el codigo o el enlace del QR manualmente.');
       return;
     }
 
@@ -891,31 +917,56 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
       setMessage('');
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       streamRef.current = stream;
+      scannerActiveRef.current = true;
       setScanning(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
 
-      const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-      let active = true;
-      const scan = async () => {
-        if (!active || !videoRef.current || !streamRef.current) return;
-        const codes = await detector.detect(videoRef.current).catch(() => []);
-        if (codes.length > 0) {
-          const rawValue = codes[0].rawValue || '';
-          setCode(rawValue);
-          active = false;
-          stopScanner();
-          validate(rawValue);
-          return;
+      if ('BarcodeDetector' in window) {
+        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        const scanWithDetector = async () => {
+          if (!scannerActiveRef.current || !videoRef.current || !streamRef.current) return;
+          const codes = await detector.detect(videoRef.current).catch(() => []);
+          if (codes.length > 0) {
+            const rawValue = codes[0].rawValue || '';
+            setCode(rawValue);
+            stopScanner();
+            validate(rawValue);
+            return;
+          }
+          scannerFrameRef.current = window.requestAnimationFrame(scanWithDetector);
+        };
+        scanWithDetector();
+        return;
+      }
+
+      const jsQR = await loadJsQr();
+      const scanWithCanvas = () => {
+        if (!scannerActiveRef.current || !videoRef.current || !canvasRef.current || !streamRef.current) return;
+        const video = videoRef.current;
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          const canvas = canvasRef.current;
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const context = canvas.getContext('2d', { willReadFrequently: true });
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+          const qr = jsQR(imageData.data, imageData.width, imageData.height);
+          if (qr?.data) {
+            setCode(qr.data);
+            stopScanner();
+            validate(qr.data);
+            return;
+          }
         }
-        window.requestAnimationFrame(scan);
+        scannerFrameRef.current = window.requestAnimationFrame(scanWithCanvas);
       };
-      scan();
+      scanWithCanvas();
     } catch (_error) {
       stopScanner();
-      setMessage('No se pudo abrir la camara. Puedes pegar el codigo manualmente.');
+      setMessage('No se pudo leer el QR con camara. Verifica permisos de camara o pega el codigo manualmente.');
     }
   }
 
@@ -947,25 +998,20 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
             value={code}
             onChange={(event) => setCode(event.target.value)}
           />
-          {!scannerSupported && (
-            <p className="qr-helper">
-              En este dispositivo usa la camara nativa del celular para abrir el QR impreso. Si ya estas dentro de la app, tambien puedes pegar aqui el codigo MAC o el enlace del QR.
-            </p>
-          )}
+          <p className="qr-helper">Usa la camara para escanear el QR o pega aqui el codigo MAC/enlace si necesitas validarlo manualmente.</p>
           {message && <p className={`form-message ${result?.approved === false ? 'error' : ''}`}>{message}</p>}
           <div className="row-actions">
             <button className="primary-btn" type="submit" disabled={loading}>
               <TicketCheck size={18} />
               {loading ? 'Validando...' : 'Validar ingreso'}
             </button>
-            {scannerSupported && (
-              <button className="ghost-btn" type="button" onClick={scanning ? stopScanner : startScanner}>
-                <QrCode size={17} />
-                {scanning ? 'Detener camara' : 'Leer con camara'}
-              </button>
-            )}
+            <button className="ghost-btn" type="button" onClick={scanning ? stopScanner : startScanner}>
+              <QrCode size={17} />
+              {scanning ? 'Detener camara' : 'Escanear con camara'}
+            </button>
           </div>
           {scanning && <video className="qr-video" ref={videoRef} muted playsInline />}
+          <canvas className="qr-canvas" ref={canvasRef} aria-hidden="true" />
         </form>
       </div>
       <div className={`panel glass accent-panel ${result ? (result.approved ? 'qr-approved' : 'qr-rejected') : ''}`}>
