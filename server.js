@@ -41,10 +41,46 @@ const DOCUMENT_TYPES = new Set([
 
 function requireAdmin(req, res, next) {
   if (req.headers["x-user-role"] !== "admin") {
-    return res.status(403).json({ error: "No tienes permisos para administrar usuarios" });
+    return res.status(403).json({ error: "No tienes permisos de administrador" });
   }
 
   next();
+}
+
+function actorFromRequest(req) {
+  return {
+    id: req.headers["x-user-id"] || null,
+    username: req.headers["x-username"] || null,
+    role: req.headers["x-user-role"] || null
+  };
+}
+
+async function auditLog(db, req, action, entityType, entityId, details = {}) {
+  const actor = actorFromRequest(req);
+  const actorUserId = actor.id || details.actorUserId || null;
+  const actorUsername = actor.username || details.actorUsername || details.username || null;
+  const actorRole = actor.role || details.actorRole || details.role || null;
+
+  try {
+    await db.query(
+      `INSERT INTO museum_audit_logs
+         (actor_user_id, actor_username, actor_role, action, entity_type, entity_id, details, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        actorUserId,
+        actorUsername,
+        actorRole,
+        action,
+        entityType,
+        entityId ? String(entityId) : null,
+        details,
+        req.ip,
+        req.headers["user-agent"] || null
+      ]
+    );
+  } catch (error) {
+    console.warn("Audit log skipped:", error.message);
+  }
 }
 
 async function roleExists(role) {
@@ -66,7 +102,7 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.post("/api/access-users/init", requireDb, async (_req, res) => {
+app.post("/api/access-users/init", requireDb, async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO museum_auth_users (username, password_hash, first_name, last_name, role)
@@ -78,6 +114,11 @@ app.post("/api/access-users/init", requireDb, async (_req, res) => {
        RETURNING id, username, first_name, last_name, role`,
       ["accesos@museo.gov", "museum2026", "Control", "Accesos", "registrar"]
     );
+
+    await auditLog(pool, req, "access_user_initialized", "auth_user", result.rows[0].id, {
+      username: result.rows[0].username,
+      role: result.rows[0].role
+    });
 
     res.status(201).json({ user: result.rows[0] });
   } catch (error) {
@@ -149,6 +190,11 @@ app.post("/api/auth-users", requireDb, requireAdmin, async (req, res) => {
       [cleanUsername, cleanPassword, cleanFirstName, cleanLastName, cleanRole]
     );
 
+    await auditLog(pool, req, "auth_user_saved", "auth_user", result.rows[0].id, {
+      username: result.rows[0].username,
+      role: result.rows[0].role
+    });
+
     res.status(201).json({ user: result.rows[0] });
   } catch (error) {
     console.error("User creation failed:", error);
@@ -194,6 +240,13 @@ app.patch("/api/auth-users/:id", requireDb, requireAdmin, async (req, res) => {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
+    await auditLog(pool, req, "auth_user_updated", "auth_user", result.rows[0].id, {
+      username: result.rows[0].username,
+      role: result.rows[0].role,
+      isActive: result.rows[0].is_active,
+      passwordChanged: hasPassword
+    });
+
     res.json({ user: result.rows[0] });
   } catch (error) {
     console.error("User update failed:", error);
@@ -215,6 +268,11 @@ app.delete("/api/auth-users/:id", requireDb, requireAdmin, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
+
+    await auditLog(pool, req, "auth_user_deactivated", "auth_user", result.rows[0].id, {
+      username: result.rows[0].username,
+      role: result.rows[0].role
+    });
 
     res.json({ user: result.rows[0] });
   } catch (error) {
@@ -258,8 +316,17 @@ app.post("/api/login", requireDb, async (req, res) => {
     );
 
     if (result.rows.length === 0) {
+      await auditLog(pool, req, "login_failed", "auth_user", null, {
+        username: String(username || "").trim().toLowerCase()
+      });
       return res.status(401).json({ error: "Usuario o contrasena incorrectos" });
     }
+
+    await auditLog(pool, req, "login_success", "auth_user", result.rows[0].id, {
+      actorUserId: result.rows[0].id,
+      username: result.rows[0].username,
+      role: result.rows[0].role
+    });
 
     res.json({ user: result.rows[0] });
   } catch (error) {
@@ -284,7 +351,7 @@ app.get("/api/rooms", requireDb, async (_req, res) => {
   }
 });
 
-app.post("/api/rooms", requireDb, async (req, res) => {
+app.post("/api/rooms", requireDb, requireAdmin, async (req, res) => {
   const { name, capacity } = req.body;
   const cleanName = String(name || "").trim();
   const parsedCapacity = Number(capacity);
@@ -304,6 +371,11 @@ app.post("/api/rooms", requireDb, async (req, res) => {
       [cleanName, parsedCapacity]
     );
 
+    await auditLog(pool, req, "service_saved", "room", result.rows[0].id, {
+      name: result.rows[0].name,
+      capacity: result.rows[0].capacity
+    });
+
     res.status(201).json({ room: result.rows[0] });
   } catch (error) {
     console.error("Room creation failed:", error);
@@ -311,7 +383,7 @@ app.post("/api/rooms", requireDb, async (req, res) => {
   }
 });
 
-app.put("/api/rooms/:id", requireDb, async (req, res) => {
+app.put("/api/rooms/:id", requireDb, requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { name, capacity } = req.body;
   const cleanName = String(name || "").trim();
@@ -336,6 +408,11 @@ app.put("/api/rooms/:id", requireDb, async (req, res) => {
       return res.status(404).json({ error: "Servicio no encontrado" });
     }
 
+    await auditLog(pool, req, "service_updated", "room", result.rows[0].id, {
+      name: result.rows[0].name,
+      capacity: result.rows[0].capacity
+    });
+
     res.json({ room: result.rows[0] });
   } catch (error) {
     if (error.code === "23505") {
@@ -346,7 +423,7 @@ app.put("/api/rooms/:id", requireDb, async (req, res) => {
   }
 });
 
-app.delete("/api/rooms/:id", requireDb, async (req, res) => {
+app.delete("/api/rooms/:id", requireDb, requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(
       `UPDATE museum_rooms
@@ -359,6 +436,11 @@ app.delete("/api/rooms/:id", requireDb, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Servicio no encontrado" });
     }
+
+    await auditLog(pool, req, "service_deactivated", "room", result.rows[0].id, {
+      name: result.rows[0].name,
+      capacity: result.rows[0].capacity
+    });
 
     res.json({ room: result.rows[0] });
   } catch (error) {
@@ -578,7 +660,19 @@ app.post("/api/entries", requireDb, async (req, res) => {
       [visitor.rows[0].id, roomId, ticket.rows[0].id, validatedBy || null]
     );
 
+    const auditDetails = {
+      visitorId: visitor.rows[0].id,
+      visitorName: visitor.rows[0].full_name,
+      documentType: visitor.rows[0].document_type,
+      documentNumber: visitor.rows[0].document_number,
+      roomId,
+      ticketId: ticket.rows[0].id,
+      ticketCode: ticket.rows[0].ticket_code
+    };
+
     await client.query("COMMIT");
+
+    await auditLog(pool, req, "access_entry_created", "access_entry", entry.rows[0].id, auditDetails);
 
     res.status(201).json({
       visitor: visitor.rows[0],
@@ -622,11 +716,21 @@ app.post("/api/qr/validate", requireDb, async (req, res) => {
     );
 
     if (result.rows.length === 0) {
+      await auditLog(pool, req, "qr_validation_not_found", "qr_ticket", null, {
+        ticketCode: code.trim().toUpperCase()
+      });
       return res.status(404).json({ error: "Ticket no encontrado" });
     }
 
     const ticket = result.rows[0];
     const approved = ticket.status === "active" && new Date(ticket.valid_until) >= new Date();
+
+    await auditLog(pool, req, approved ? "qr_validation_approved" : "qr_validation_rejected", "qr_ticket", ticket.id, {
+      ticketCode: ticket.ticket_code,
+      visitorName: ticket.full_name,
+      status: ticket.status,
+      validUntil: ticket.valid_until
+    });
 
     res.json({ approved, ticket });
   } catch (error) {
@@ -797,6 +901,56 @@ app.get("/api/reports/accesses", requireDb, async (req, res) => {
   } catch (error) {
     console.error("Access report query failed:", error);
     res.status(500).json({ error: "No se pudo cargar el reporte de accesos" });
+  }
+});
+
+app.post("/api/audit-events", requireDb, async (req, res) => {
+  const { action, entityType, entityId, details } = req.body;
+  const allowedActions = new Set(["logout"]);
+
+  if (!allowedActions.has(action)) {
+    return res.status(400).json({ error: "Evento no valido" });
+  }
+
+  await auditLog(pool, req, action, entityType || "session", entityId || null, details || {});
+  res.status(201).json({ ok: true });
+});
+
+app.get("/api/audit-logs", requireDb, requireAdmin, async (req, res) => {
+  const search = searchValue(req);
+  const auditSearch = `%${search}%`;
+
+  try {
+    const result = await pool.query(
+      `SELECT id,
+              actor_user_id,
+              COALESCE(actor_username, 'Sistema') AS actor_username,
+              actor_role,
+              action,
+              entity_type,
+              entity_id,
+              details,
+              ip_address,
+              user_agent,
+              to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at
+       FROM museum_audit_logs
+       WHERE ($1 = ''
+         OR actor_username ILIKE $2
+         OR actor_role ILIKE $2
+         OR action ILIKE $2
+         OR entity_type ILIKE $2
+         OR entity_id ILIKE $2
+         OR details::text ILIKE $2
+         OR to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') ILIKE $2)
+       ORDER BY created_at DESC
+       LIMIT 200`,
+      [search, auditSearch]
+    );
+
+    res.json({ logs: result.rows });
+  } catch (error) {
+    console.error("Audit logs query failed:", error);
+    res.status(500).json({ error: "No se pudo cargar la auditoria" });
   }
 });
 

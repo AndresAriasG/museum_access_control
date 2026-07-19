@@ -42,7 +42,8 @@ const navItems = [
   { id: 'usuarios', label: 'Usuarios', icon: UserRound, roles: ['admin'] },
   { id: 'qr', label: 'QR generados', icon: QrCode, roles: ['admin'] },
   { id: 'historial', label: 'Historial', icon: History, roles: ['admin'] },
-  { id: 'reportes', label: 'Reportes', icon: BarChart3, roles: ['admin', 'registrar', 'operator'] }
+  { id: 'reportes', label: 'Reportes', icon: BarChart3, roles: ['admin', 'registrar', 'operator'] },
+  { id: 'auditoria', label: 'Auditoria', icon: ShieldCheck, roles: ['admin'] }
 ];
 
 const roleOptions = [
@@ -80,6 +81,14 @@ async function api(path, options = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || 'Error de conexion');
   return data;
+}
+
+function authHeaders(user) {
+  return {
+    'X-User-Id': user?.id || '',
+    'X-Username': user?.username || '',
+    'X-User-Role': user?.role || ''
+  };
 }
 
 function withSearch(path, query) {
@@ -530,6 +539,7 @@ function EntryModule({ rooms, user, onSaved }) {
     try {
       const data = await api('/api/entries', {
         method: 'POST',
+        headers: authHeaders(user),
         body: JSON.stringify({ ...form, validatedBy: user?.id })
       });
       setMessage(`Entrada registrada. QR: ${data.ticket.ticket_code}`);
@@ -634,7 +644,7 @@ function EntryModule({ rooms, user, onSaved }) {
   );
 }
 
-function RoomsModule({ rooms, onSaved }) {
+function RoomsModule({ rooms, user, onSaved }) {
   const [form, setForm] = useState({ name: '', capacity: '' });
   const [draftRooms, setDraftRooms] = useState({});
   const [message, setMessage] = useState('');
@@ -658,6 +668,7 @@ function RoomsModule({ rooms, onSaved }) {
     try {
       const data = await api('/api/rooms', {
         method: 'POST',
+        headers: authHeaders(user),
         body: JSON.stringify({ name: form.name, capacity: Number(form.capacity) })
       });
       setMessage(`Servicio guardado: ${data.room.name}`);
@@ -684,6 +695,7 @@ function RoomsModule({ rooms, onSaved }) {
     try {
       const data = await api(`/api/rooms/${roomId}`, {
         method: 'PUT',
+        headers: authHeaders(user),
         body: JSON.stringify({ name: draft.name, capacity: Number(draft.capacity) })
       });
       setMessage(`Servicio actualizado: ${data.room.name}`);
@@ -701,7 +713,7 @@ function RoomsModule({ rooms, onSaved }) {
     setBusyId(room.id);
     setMessage('');
     try {
-      await api(`/api/rooms/${room.id}`, { method: 'DELETE' });
+      await api(`/api/rooms/${room.id}`, { method: 'DELETE', headers: authHeaders(user) });
       setMessage(`Servicio eliminado: ${room.name}`);
       onSaved();
     } catch (err) {
@@ -957,7 +969,7 @@ function UsersModule({ user }) {
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState('');
 
-  const adminHeaders = { 'X-User-Role': user?.role || '' };
+  const adminHeaders = authHeaders(user);
 
   async function loadUsers() {
     const [usersData, profilesData] = await Promise.all([
@@ -1131,6 +1143,115 @@ function UsersModule({ user }) {
   );
 }
 
+const actionLabels = {
+  access_user_initialized: 'Usuario operativo inicializado',
+  auth_user_saved: 'Usuario guardado',
+  auth_user_updated: 'Usuario actualizado',
+  auth_user_deactivated: 'Usuario desactivado',
+  login_failed: 'Login fallido',
+  login_success: 'Login exitoso',
+  logout: 'Cierre de sesion',
+  service_saved: 'Servicio guardado',
+  service_updated: 'Servicio actualizado',
+  service_deactivated: 'Servicio desactivado',
+  access_entry_created: 'Entrada registrada',
+  qr_validation_approved: 'QR aprobado',
+  qr_validation_rejected: 'QR rechazado',
+  qr_validation_not_found: 'QR no encontrado'
+};
+
+function auditDetails(details = {}) {
+  const values = [
+    details.username,
+    details.visitorName,
+    details.ticketCode,
+    details.name,
+    details.role,
+    details.documentNumber
+  ].filter(Boolean);
+
+  if (values.length > 0) return values.join(' · ');
+  const keys = Object.keys(details || {});
+  return keys.length ? keys.slice(0, 4).map((key) => `${key}: ${details[key]}`).join(' · ') : 'Sin detalle adicional';
+}
+
+function AuditModule({ user }) {
+  const [logs, setLogs] = useState([]);
+  const [search, setSearch] = useState('');
+  const [draft, setDraft] = useState('');
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function loadLogs(nextSearch = search) {
+    setLoading(true);
+    setMessage('');
+    try {
+      const data = await api(withSearch('/api/audit-logs', nextSearch), { headers: authHeaders(user) });
+      setLogs(data.logs || []);
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadLogs().catch((err) => setMessage(err.message));
+  }, []);
+
+  function submit(event) {
+    event.preventDefault();
+    const nextSearch = draft.trim();
+    setSearch(nextSearch);
+    loadLogs(nextSearch);
+  }
+
+  function clear() {
+    setDraft('');
+    setSearch('');
+    loadLogs('');
+  }
+
+  return (
+    <section className="panel glass full">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Auditoria del sistema</p>
+          <h3>Actividad de usuarios</h3>
+        </div>
+        <button className="ghost-btn" type="button" onClick={() => loadLogs(search)} disabled={loading}>
+          {loading ? 'Actualizando...' : 'Actualizar'}
+        </button>
+      </div>
+      <form className="history-toolbar" onSubmit={submit}>
+        <div className="search-box history-search">
+          <Search size={17} />
+          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Buscar usuario, accion, entidad, fecha o detalle" />
+        </div>
+        <button className="ghost-btn" type="submit">Buscar</button>
+        {search && <button className="ghost-btn" type="button" onClick={clear}>Limpiar</button>}
+      </form>
+      {message && <p className="form-message error">{message}</p>}
+      <p className="empty-state">{search ? `${logs.length} evento(s) para "${search}"` : `${logs.length} evento(s) recientes`}</p>
+      <div className="table audit-table">
+        {logs.length === 0 && <p className="empty-state">No hay eventos registrados.</p>}
+        {logs.map((item) => (
+          <div className="table-row audit-row" key={item.id}>
+            <div>
+              <strong>{actionLabels[item.action] || item.action}</strong>
+              <span>{auditDetails(item.details)}</span>
+            </div>
+            <span>{item.actor_username}</span>
+            <span>{item.entity_type}{item.entity_id ? ` · ${item.entity_id.slice(0, 8)}` : ''}</span>
+            <span>{item.created_at}</span>
+            <mark>{roleLabel(item.actor_role)}</mark>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function IntegrationStatus() {
   return (
     <div className="integration-card glass">
@@ -1222,7 +1343,15 @@ function App() {
     setSearchQuery('');
   }
 
-  function logout() {
+  async function logout() {
+    const currentUser = user;
+    if (currentUser) {
+      api('/api/audit-events', {
+        method: 'POST',
+        headers: authHeaders(currentUser),
+        body: JSON.stringify({ action: 'logout', entityType: 'session', entityId: currentUser.id })
+      }).catch(() => {});
+    }
     setUser(null);
     setActive('dashboard');
     setMenuOpen(false);
@@ -1267,7 +1396,7 @@ function App() {
     const currentItem = navItems.find((item) => item.id === active);
     if (currentItem && !canAccess(currentItem, user)) return <Dashboard data={filteredDashboard} />;
     if (active === 'entrada') return <EntryModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
-    if (active === 'salas') return <RoomsModule rooms={dashboard.rooms} onSaved={loadData} />;
+    if (active === 'salas') return <RoomsModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
     if (active === 'usuarios') return <UsersModule user={user} />;
     if (active === 'qr') return <QrModule history={history} />;
     if (active === 'historial') {
@@ -1294,6 +1423,7 @@ function App() {
         />
       );
     }
+    if (active === 'auditoria') return <AuditModule user={user} />;
     return <Dashboard data={filteredDashboard} />;
   }, [active, dashboard, history, reports, user, searchQuery, searchDraft, accessReport, reportRange, notifications]);
 
