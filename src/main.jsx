@@ -75,9 +75,10 @@ const documentTypes = [
 ];
 
 async function api(path, options = {}) {
+  const { headers = {}, ...rest } = options;
   const response = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options
+    ...rest,
+    headers: { 'Content-Type': 'application/json', ...headers }
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || 'Error de conexion');
