@@ -1,5 +1,16 @@
 BEGIN;
 
+INSERT INTO museum_role_profiles (code, name, description, allowed_modules)
+VALUES
+  ('admin', 'Administrador', 'Acceso completo a administracion, reportes, servicios, usuarios y registros.', '["dashboard","entrada","salas","usuarios","qr","historial","reportes"]'::jsonb),
+  ('registrar', 'Registro', 'Carga visitantes, registra entradas, imprime QR y consulta historial operativo.', '["dashboard","entrada","qr","historial"]'::jsonb)
+ON CONFLICT (code) DO UPDATE
+SET name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    allowed_modules = EXCLUDED.allowed_modules,
+    is_active = true,
+    updated_at = now();
+
 INSERT INTO museum_auth_users (username, password_hash, first_name, last_name, role)
 VALUES
   ('admin@museo.gov', 'museum2026', 'Administrador', 'Museo', 'admin'),

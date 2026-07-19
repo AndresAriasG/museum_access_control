@@ -49,13 +49,18 @@ const roleOptions = [
   { value: 'registrar', label: 'Registro' }
 ];
 
-function roleLabel(role) {
+function roleLabel(role, roleName) {
+  if (roleName) return roleName;
   if (role === 'admin') return 'Administrador';
   if (role === 'registrar' || role === 'operator') return 'Registro';
   return 'Usuario';
 }
 
 function canAccess(item, user) {
+  if (Array.isArray(user?.allowed_modules) && user.allowed_modules.length > 0) {
+    return user.allowed_modules.includes(item.id);
+  }
+
   return item.roles.includes(user?.role);
 }
 
@@ -360,7 +365,7 @@ function Header({
           <button className="ghost-btn search-action" type="submit">Buscar</button>
           {searchQuery && <button className="ghost-btn search-action" type="button" onClick={onClearSearch}>Limpiar</button>}
         </form>
-        <span className="session-label">{user?.first_name || 'Usuario'} · {roleLabel(user?.role)}</span>
+        <span className="session-label">{user?.first_name || 'Usuario'} · {roleLabel(user?.role, user?.role_name)}</span>
         <div className="notification-wrap">
           <button className="icon-btn" type="button" onClick={onToggleNotifications} aria-label="Notificaciones"><Bell size={19} /></button>
           {notificationsOpen && (
@@ -933,6 +938,7 @@ function ReportsModule({ data, reports, accessReport, reportRange, onRangeChange
 
 function UsersModule({ user }) {
   const [users, setUsers] = useState([]);
+  const [profiles, setProfiles] = useState(roleOptions);
   const [draftUsers, setDraftUsers] = useState({});
   const [form, setForm] = useState({
     username: '',
@@ -948,8 +954,16 @@ function UsersModule({ user }) {
   const adminHeaders = { 'X-User-Role': user?.role || '' };
 
   async function loadUsers() {
-    const data = await api('/api/auth-users', { headers: adminHeaders });
-    setUsers(data.users || []);
+    const [usersData, profilesData] = await Promise.all([
+      api('/api/auth-users', { headers: adminHeaders }),
+      api('/api/role-profiles', { headers: adminHeaders })
+    ]);
+    setUsers(usersData.users || []);
+    const profileOptions = (profilesData.profiles || []).map((profile) => ({
+      value: profile.code,
+      label: profile.name
+    }));
+    setProfiles(profileOptions.length ? profileOptions : roleOptions);
   }
 
   useEffect(() => {
@@ -1051,7 +1065,7 @@ function UsersModule({ user }) {
             <input placeholder="Apellido" value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} />
           </div>
           <select required value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
-            {roleOptions.map((role) => <option value={role.value} key={role.value}>{role.label}</option>)}
+            {profiles.map((role) => <option value={role.value} key={role.value}>{role.label}</option>)}
           </select>
           {message && <p className="form-message">{message}</p>}
           <button className="primary-btn" type="submit" disabled={loading}>
@@ -1082,7 +1096,7 @@ function UsersModule({ user }) {
                 <div className="user-admin-head">
                   <div>
                     <strong>{item.username}</strong>
-                    <span>{roleLabel(item.role)} · {item.is_active ? 'Activo' : 'Inactivo'}</span>
+                    <span>{roleLabel(item.role, item.role_name)} · {item.is_active ? 'Activo' : 'Inactivo'}</span>
                   </div>
                   <mark>{item.is_active ? 'Activo' : 'Inactivo'}</mark>
                 </div>
@@ -1090,7 +1104,7 @@ function UsersModule({ user }) {
                   <input required value={draft.firstName} onChange={(event) => updateDraft(item.id, { firstName: event.target.value })} />
                   <input value={draft.lastName} onChange={(event) => updateDraft(item.id, { lastName: event.target.value })} />
                   <select value={draft.role} onChange={(event) => updateDraft(item.id, { role: event.target.value })}>
-                    {roleOptions.map((role) => <option value={role.value} key={role.value}>{role.label}</option>)}
+                    {profiles.map((role) => <option value={role.value} key={role.value}>{role.label}</option>)}
                   </select>
                   <input minLength="8" type="password" placeholder="Nueva contrasena" value={draft.password} onChange={(event) => updateDraft(item.id, { password: event.target.value })} />
                 </div>

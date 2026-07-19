@@ -39,14 +39,23 @@ const DOCUMENT_TYPES = new Set([
   "Cedula de extranjeria"
 ]);
 
-const USER_ROLES = new Set(["admin", "registrar", "operator"]);
-
 function requireAdmin(req, res, next) {
   if (req.headers["x-user-role"] !== "admin") {
     return res.status(403).json({ error: "No tienes permisos para administrar usuarios" });
   }
 
   next();
+}
+
+async function roleExists(role) {
+  const result = await pool.query(
+    `SELECT code
+     FROM museum_role_profiles
+     WHERE code = $1 AND is_active = true`,
+    [role]
+  );
+
+  return result.rows.length > 0;
 }
 
 app.get("/api/health", (_req, res) => {
@@ -80,9 +89,18 @@ app.post("/api/access-users/init", requireDb, async (_req, res) => {
 app.get("/api/auth-users", requireDb, requireAdmin, async (_req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, username, first_name, last_name, role, is_active, created_at, updated_at
-       FROM museum_auth_users
-       ORDER BY is_active DESC, created_at DESC`
+      `SELECT u.id,
+              u.username,
+              u.first_name,
+              u.last_name,
+              u.role,
+              COALESCE(p.name, u.role) AS role_name,
+              u.is_active,
+              u.created_at,
+              u.updated_at
+       FROM museum_auth_users u
+       LEFT JOIN museum_role_profiles p ON p.code = u.role
+       ORDER BY u.is_active DESC, u.created_at DESC`
     );
 
     res.json({ users: result.rows });
@@ -112,7 +130,7 @@ app.post("/api/auth-users", requireDb, requireAdmin, async (req, res) => {
     return res.status(400).json({ error: "La contrasena debe tener al menos 8 caracteres" });
   }
 
-  if (!USER_ROLES.has(cleanRole)) {
+  if (!(await roleExists(cleanRole))) {
     return res.status(400).json({ error: "Rol no valido" });
   }
 
@@ -150,7 +168,7 @@ app.patch("/api/auth-users/:id", requireDb, requireAdmin, async (req, res) => {
     return res.status(400).json({ error: "Nombre y rol son obligatorios" });
   }
 
-  if (!USER_ROLES.has(cleanRole)) {
+  if (!(await roleExists(cleanRole))) {
     return res.status(400).json({ error: "Rol no valido" });
   }
 
@@ -205,14 +223,37 @@ app.delete("/api/auth-users/:id", requireDb, requireAdmin, async (req, res) => {
   }
 });
 
+app.get("/api/role-profiles", requireDb, requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT code, name, description, allowed_modules, is_active
+       FROM museum_role_profiles
+       WHERE is_active = true AND code <> 'operator'
+       ORDER BY name ASC`
+    );
+
+    res.json({ profiles: result.rows });
+  } catch (error) {
+    console.error("Role profiles query failed:", error);
+    res.status(500).json({ error: "No se pudieron cargar los perfiles" });
+  }
+});
+
 app.post("/api/login", requireDb, async (req, res) => {
   const { username, password } = req.body;
 
   try {
     const result = await pool.query(
-      `SELECT id, username, first_name, last_name, role
-       FROM museum_auth_users
-       WHERE username = $1 AND password_hash = $2 AND is_active = true`,
+      `SELECT u.id,
+              u.username,
+              u.first_name,
+              u.last_name,
+              u.role,
+              COALESCE(p.name, u.role) AS role_name,
+              COALESCE(p.allowed_modules, '[]'::jsonb) AS allowed_modules
+       FROM museum_auth_users u
+       LEFT JOIN museum_role_profiles p ON p.code = u.role
+       WHERE u.username = $1 AND u.password_hash = $2 AND u.is_active = true`,
       [username, password]
     );
 
