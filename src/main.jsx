@@ -523,6 +523,87 @@ function Dashboard({ data }) {
   );
 }
 
+const bulkFieldAliases = {
+  fullName: ['nombre', 'nombre completo', 'full name', 'visitante'],
+  documentType: ['tipo documento', 'tipo de documento', 'document type'],
+  documentNumber: ['documento', 'numero documento', 'numero de documento', 'documento / id', 'id'],
+  visitorType: ['tipo visitante', 'tipo de visitante', 'visitor type'],
+  email: ['email', 'correo', 'correo electronico'],
+  phone: ['telefono', 'celular', 'phone'],
+  country: ['pais', 'country'],
+  city: ['ciudad', 'city'],
+  room: ['servicio', 'sala', 'room']
+};
+
+function normalizeHeader(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function firstValue(row, aliases) {
+  const normalizedRow = Object.entries(row).reduce((acc, [key, value]) => {
+    acc[normalizeHeader(key)] = value;
+    return acc;
+  }, {});
+  const alias = aliases.find((item) => normalizedRow[normalizeHeader(item)] !== undefined);
+  return alias ? String(normalizedRow[normalizeHeader(alias)] || '').trim() : '';
+}
+
+function roomIdForBulkRow(row, rooms, fallbackRoomId) {
+  const roomName = firstValue(row, bulkFieldAliases.room);
+  if (!roomName) return fallbackRoomId || '';
+  const normalizedRoomName = normalizeHeader(roomName);
+  const room = rooms.find((item) => normalizeHeader(item.name) === normalizedRoomName);
+  return room?.id || '';
+}
+
+function mapBulkRows(rows, rooms, fallbackRoomId) {
+  return rows
+    .map((row, index) => {
+      const roomId = roomIdForBulkRow(row, rooms, fallbackRoomId);
+      const room = rooms.find((item) => item.id === roomId);
+      return {
+        rowNumber: index + 2,
+        fullName: firstValue(row, bulkFieldAliases.fullName),
+        documentType: firstValue(row, bulkFieldAliases.documentType) || 'Cedula de ciudadania',
+        documentNumber: firstValue(row, bulkFieldAliases.documentNumber),
+        visitorType: firstValue(row, bulkFieldAliases.visitorType) || 'General',
+        email: firstValue(row, bulkFieldAliases.email),
+        phone: firstValue(row, bulkFieldAliases.phone),
+        country: firstValue(row, bulkFieldAliases.country),
+        city: firstValue(row, bulkFieldAliases.city),
+        roomId,
+        roomName: room?.name || firstValue(row, bulkFieldAliases.room) || '',
+        status: 'pending',
+        message: ''
+      };
+    })
+    .filter((row) => [row.fullName, row.documentNumber, row.country, row.city, row.roomName].some(Boolean));
+}
+
+function downloadBulkTemplate(rooms) {
+  const headers = ['Nombre', 'Tipo documento', 'Documento', 'Tipo visitante', 'Email', 'Telefono', 'Pais', 'Ciudad', 'Servicio'];
+  const sampleRoom = rooms[0]?.name || 'Recorridos';
+  const rows = [
+    headers,
+    ['Ana Perez', 'Cedula de ciudadania', '123456789', 'General', '', '', 'Colombia', 'Medellin', sampleRoom]
+  ];
+  const csv = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'plantilla-registro-masivo.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function EntryModule({ rooms, user, onSaved }) {
   const [form, setForm] = useState({
     fullName: '',
@@ -538,6 +619,9 @@ function EntryModule({ rooms, user, onSaved }) {
   const [message, setMessage] = useState('');
   const [generatedTicket, setGeneratedTicket] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [bulkRows, setBulkRows] = useState([]);
+  const [bulkMessage, setBulkMessage] = useState('');
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   useEffect(() => {
     if (!form.roomId && rooms[0]?.id) setForm((current) => ({ ...current, roomId: rooms[0].id }));
@@ -582,6 +666,85 @@ function EntryModule({ rooms, user, onSaved }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleBulkFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setBulkMessage('');
+    setBulkRows([]);
+    try {
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      let rows = [];
+      if (extension === 'csv') {
+        const text = await file.text();
+        const XLSX = await loadSheetJs();
+        const workbook = XLSX.read(text, { type: 'string' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      } else {
+        const buffer = await file.arrayBuffer();
+        const XLSX = await loadSheetJs();
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      }
+      const mappedRows = mapBulkRows(rows, rooms, form.roomId);
+      setBulkRows(mappedRows);
+      setBulkMessage(mappedRows.length ? `${mappedRows.length} fila(s) listas para revisar.` : 'No se encontraron filas validas en el archivo.');
+    } catch (_error) {
+      setBulkMessage('No se pudo leer el archivo. Usa .xlsx, .xls o .csv con la plantilla.');
+    } finally {
+      event.target.value = '';
+    }
+  }
+
+  function bulkRowMissingFields(row) {
+    return [
+      ['Nombre', row.fullName],
+      ['Tipo documento', row.documentType],
+      ['Documento', row.documentNumber],
+      ['Pais', row.country],
+      ['Ciudad', row.city],
+      ['Servicio', row.roomId]
+    ].filter(([, value]) => !String(value || '').trim()).map(([label]) => label);
+  }
+
+  async function submitBulkRows() {
+    setBulkLoading(true);
+    setBulkMessage('');
+    let saved = 0;
+    let failed = 0;
+    const nextRows = [...bulkRows];
+
+    for (let index = 0; index < nextRows.length; index += 1) {
+      const row = nextRows[index];
+      const missing = bulkRowMissingFields(row);
+      if (missing.length > 0) {
+        nextRows[index] = { ...row, status: 'error', message: `Faltan: ${missing.join(', ')}` };
+        failed += 1;
+        setBulkRows([...nextRows]);
+        continue;
+      }
+
+      try {
+        const data = await api('/api/entries', {
+          method: 'POST',
+          headers: authHeaders(user),
+          body: JSON.stringify({ ...row, validatedBy: user?.id })
+        });
+        nextRows[index] = { ...row, status: 'saved', message: data.ticket.ticket_code };
+        saved += 1;
+      } catch (err) {
+        nextRows[index] = { ...row, status: 'error', message: err.message };
+        failed += 1;
+      }
+      setBulkRows([...nextRows]);
+    }
+
+    setBulkLoading(false);
+    setBulkMessage(`${saved} registro(s) guardados. ${failed} fila(s) con novedad.`);
+    if (saved > 0) onSaved();
   }
 
   return (
@@ -650,6 +813,41 @@ function EntryModule({ rooms, user, onSaved }) {
         <p>Control de capacidad, horario de visita y trazabilidad de entrada en una sola operacion.</p>
         <div className="metric-line"><span>Servicios disponibles</span><strong>{rooms.length}</strong></div>
         <div className="metric-line"><span>Operador</span><strong>{user?.first_name || 'Activo'}</strong></div>
+      </div>
+      <div className="panel glass bulk-panel">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Carga masiva</p>
+            <h3>Registrar desde Excel</h3>
+          </div>
+          <button className="ghost-btn" type="button" onClick={() => downloadBulkTemplate(rooms)}>Plantilla CSV</button>
+        </div>
+        <div className="bulk-upload">
+          <input type="file" accept=".xlsx,.xls,.csv" onChange={handleBulkFile} />
+          <span>Columnas: Nombre, Tipo documento, Documento, Pais, Ciudad y Servicio. Email y Telefono son opcionales.</span>
+        </div>
+        {bulkMessage && <p className="form-message">{bulkMessage}</p>}
+        {bulkRows.length > 0 && (
+          <>
+            <div className="bulk-preview">
+              {bulkRows.slice(0, 8).map((row) => (
+                <div className={`bulk-row ${row.status}`} key={`${row.rowNumber}-${row.documentNumber}`}>
+                  <div>
+                    <strong>{row.fullName || `Fila ${row.rowNumber}`}</strong>
+                    <span>{[[row.documentType, row.documentNumber].filter(Boolean).join(': '), [row.city, row.country].filter(Boolean).join(', '), row.roomName].filter(Boolean).join(' · ')}</span>
+                  </div>
+                  <mark>{row.status === 'saved' ? row.message : row.status === 'error' ? 'Novedad' : 'Pendiente'}</mark>
+                  {row.message && row.status === 'error' && <small>{row.message}</small>}
+                </div>
+              ))}
+            </div>
+            {bulkRows.length > 8 && <p className="empty-state">Mostrando 8 de {bulkRows.length} filas.</p>}
+            <button className="primary-btn" type="button" disabled={bulkLoading || rooms.length === 0} onClick={submitBulkRows}>
+              <CheckCircle2 size={18} />
+              {bulkLoading ? 'Registrando lote...' : 'Registrar lote'}
+            </button>
+          </>
+        )}
       </div>
     </section>
   );
@@ -859,6 +1057,27 @@ function loadJsQr() {
     script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
     script.async = true;
     script.onload = () => resolve(window.jsQR);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+function loadSheetJs() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  const existingScript = document.getElementById('xlsx-loader');
+  if (existingScript) {
+    return new Promise((resolve, reject) => {
+      existingScript.addEventListener('load', () => resolve(window.XLSX), { once: true });
+      existingScript.addEventListener('error', reject, { once: true });
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.id = 'xlsx-loader';
+    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    script.async = true;
+    script.onload = () => resolve(window.XLSX);
     script.onerror = reject;
     document.head.appendChild(script);
   });

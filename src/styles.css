@@ -993,6 +993,56 @@ mark {
   gap: 18px;
 }
 
+.bulk-panel {
+  grid-column: 1 / -1;
+}
+
+.bulk-upload {
+  display: grid;
+  gap: 8px;
+}
+
+.bulk-upload span,
+.bulk-row small {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.bulk-preview {
+  display: grid;
+  gap: 10px;
+}
+
+.bulk-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.bulk-row div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bulk-row span,
+.bulk-row strong,
+.bulk-row small {
+  overflow-wrap: anywhere;
+}
+
+.bulk-row.error {
+  border: 1px solid rgba(194, 65, 93, 0.28);
+}
+
+.bulk-row.saved {
+  border: 1px solid rgba(22, 131, 92, 0.28);
+}
+
 .accent-panel {
   display: grid;
   align-content: center;
@@ -1294,6 +1344,11 @@ mark {
   .room-admin-row.editing {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .bulk-row {
+    grid-template-columns: 1fr;
+    align-items: start;
   }
 
   .room-edit-grid {
