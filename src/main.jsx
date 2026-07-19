@@ -636,6 +636,7 @@ function EntryModule({ rooms, user, onSaved }) {
   const [loading, setLoading] = useState(false);
   const [bulkRows, setBulkRows] = useState([]);
   const [bulkMessage, setBulkMessage] = useState('');
+  const [bulkParsing, setBulkParsing] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
 
   useEffect(() => {
@@ -686,7 +687,8 @@ function EntryModule({ rooms, user, onSaved }) {
   async function handleBulkFile(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    setBulkMessage('');
+    setBulkParsing(true);
+    setBulkMessage('Leyendo y validando archivo...');
     setBulkRows([]);
     try {
       const extension = file.name.split('.').pop()?.toLowerCase();
@@ -708,11 +710,18 @@ function EntryModule({ rooms, user, onSaved }) {
         const issues = bulkRowIssues(row);
         return issues.length > 0 ? { ...row, status: 'error', message: issues.join(', ') } : row;
       });
+      const issueCount = mappedRows.filter((row) => row.status === 'error').length;
+      const readyCount = mappedRows.length - issueCount;
       setBulkRows(mappedRows);
-      setBulkMessage(mappedRows.length ? `${mappedRows.length} fila(s) listas para revisar. Servicio por defecto: Eventos.` : 'No se encontraron filas validas en el archivo.');
+      setBulkMessage(
+        mappedRows.length
+          ? `${readyCount} fila(s) listas. ${issueCount} fila(s) con novedad. Servicio por defecto: Eventos.`
+          : 'No se encontraron filas validas en el archivo.'
+      );
     } catch (_error) {
       setBulkMessage('No se pudo leer el archivo. Usa .xlsx, .xls o .csv con la plantilla.');
     } finally {
+      setBulkParsing(false);
       event.target.value = '';
     }
   }
@@ -773,6 +782,8 @@ function EntryModule({ rooms, user, onSaved }) {
     setBulkMessage(`${saved} registro(s) guardados. ${failed} fila(s) con novedad.`);
     if (saved > 0) onSaved();
   }
+
+  const bulkIssueCount = bulkRows.filter((row) => row.status === 'error').length;
 
   return (
     <section className="module-layout">
@@ -850,7 +861,7 @@ function EntryModule({ rooms, user, onSaved }) {
           <button className="ghost-btn" type="button" onClick={() => downloadBulkTemplate(rooms)}>Plantilla CSV</button>
         </div>
         <div className="bulk-upload">
-          <input type="file" accept=".xlsx,.xls,.csv" onChange={handleBulkFile} />
+          <input type="file" accept=".xlsx,.xls,.csv" onChange={handleBulkFile} disabled={bulkParsing || bulkLoading} />
           <span>Obligatorias: Nombre, Tipo documento, Documento, Pais y Ciudad. Email y Telefono son opcionales. Servicio se asigna como Eventos.</span>
         </div>
         {bulkMessage && <p className="form-message">{bulkMessage}</p>}
@@ -869,9 +880,10 @@ function EntryModule({ rooms, user, onSaved }) {
               ))}
             </div>
             {bulkRows.length > 8 && <p className="empty-state">Mostrando 8 de {bulkRows.length} filas.</p>}
-            <button className="primary-btn" type="button" disabled={bulkLoading || rooms.length === 0} onClick={submitBulkRows}>
+            {bulkIssueCount > 0 && <p className="empty-state">{bulkIssueCount} fila(s) necesitan correccion antes de registrarse.</p>}
+            <button className="primary-btn" type="button" disabled={bulkLoading || bulkParsing || rooms.length === 0} onClick={submitBulkRows}>
               <CheckCircle2 size={18} />
-              {bulkLoading ? 'Registrando lote...' : 'Registrar lote'}
+              {bulkLoading ? 'Registrando lote...' : 'Validar y registrar lote'}
             </button>
           </>
         )}
