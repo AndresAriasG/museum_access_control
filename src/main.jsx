@@ -401,11 +401,6 @@ function Header({
   title,
   onMenu,
   user,
-  searchQuery,
-  searchDraft,
-  onSearchDraft,
-  onSearchSubmit,
-  onClearSearch,
   notifications,
   notificationsOpen,
   onToggleNotifications,
@@ -419,14 +414,6 @@ function Header({
         <h2>{title}</h2>
       </div>
       <div className="topbar-actions">
-        <form className="search-form" onSubmit={onSearchSubmit}>
-          <div className="search-box">
-            <Search size={17} />
-            <input value={searchDraft} onChange={(event) => onSearchDraft(event.target.value)} placeholder="Buscar visitante, servicio o QR" />
-          </div>
-          <button className="ghost-btn search-action" type="submit">Buscar</button>
-          {searchQuery && <button className="ghost-btn search-action" type="button" onClick={onClearSearch}>Limpiar</button>}
-        </form>
         <span className="session-label">{user?.first_name || 'Usuario'} · {roleLabel(user?.role, user?.role_name)}</span>
         <button className="ghost-btn logout-btn" type="button" onClick={onLogout}>
           <LogOut size={17} />
@@ -1074,8 +1061,22 @@ function RoomsModule({ rooms, user, onSaved }) {
 }
 
 function QrModule({ history }) {
-  const tickets = history.filter((item) => item.ticket_code).slice(0, 12);
+  const tickets = history.filter((item) => item.ticket_code);
+  const [qrSearch, setQrSearch] = useState('');
+  const [qrDraft, setQrDraft] = useState('');
   const [selectedTicket, setSelectedTicket] = useState(null);
+  const filteredTickets = tickets.filter((item) => matchesSearch(item, qrSearch));
+  const visibleTickets = qrSearch ? filteredTickets : filteredTickets.slice(0, 12);
+
+  function submitSearch(event) {
+    event.preventDefault();
+    setQrSearch(qrDraft.trim());
+  }
+
+  function clearSearch() {
+    setQrDraft('');
+    setQrSearch('');
+  }
 
   return (
     <>
@@ -1086,9 +1087,21 @@ function QrModule({ history }) {
             <h3>QR generados por ingreso</h3>
           </div>
         </div>
+        <form className="history-toolbar qr-search-toolbar" onSubmit={submitSearch}>
+          <div className="search-box history-search">
+            <Search size={17} />
+            <input value={qrDraft} onChange={(event) => setQrDraft(event.target.value)} placeholder="Buscar por nombre, documento, telefono, QR, servicio, ciudad o pais" />
+          </div>
+          <button className="ghost-btn" type="submit">Buscar</button>
+          {qrSearch && <button className="ghost-btn" type="button" onClick={clearSearch}>Limpiar</button>}
+        </form>
+        <p className="empty-state">
+          {qrSearch ? `${filteredTickets.length} QR para "${qrSearch}"` : `Mostrando ${visibleTickets.length} de ${tickets.length} QR generado(s)`}
+        </p>
         {tickets.length === 0 && <p className="empty-state">Aun no hay QR generados. Registra una entrada para crear el primero.</p>}
+        {tickets.length > 0 && filteredTickets.length === 0 && <p className="empty-state">No hay QR que coincidan con la busqueda.</p>}
         <div className="qr-list">
-          {tickets.map((item) => (
+          {visibleTickets.map((item) => (
             <article className="qr-list-row" key={item.id}>
               <QRCodeImage value={qrPayload(item)} label={item.ticket_code} onClick={() => setSelectedTicket(item)} />
               <div className="qr-list-info">
@@ -1386,7 +1399,7 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
   );
 }
 
-function HistoryModule({ history, user, searchQuery, searchDraft, onSearchDraft, onSearchSubmit, onClearSearch, onChanged }) {
+function HistoryModule({ history, user, onChanged }) {
   const [draftVisitors, setDraftVisitors] = useState({});
   const [voidReasons, setVoidReasons] = useState({});
   const [busyId, setBusyId] = useState('');
@@ -1472,23 +1485,17 @@ function HistoryModule({ history, user, searchQuery, searchDraft, onSearchDraft,
           <h3>Historial de accesos</h3>
         </div>
       </div>
-      <form className="history-toolbar" onSubmit={onSearchSubmit}>
-        <div className="search-box history-search">
-          <Search size={17} />
-          <input value={searchDraft} onChange={(event) => onSearchDraft(event.target.value)} placeholder="Buscar por nombre, documento, telefono, QR, servicio, ciudad, pais o estado" />
-        </div>
-        <button className="ghost-btn" type="submit">Buscar</button>
-        {searchQuery && <button className="ghost-btn" type="button" onClick={onClearSearch}>Limpiar</button>}
+      <div className="history-toolbar">
         <button className="primary-btn export-btn" type="button" onClick={() => exportCsv(history)}>
           Exportar CSV
         </button>
-      </form>
+      </div>
       {message && <p className="form-message">{message}</p>}
       <p className="empty-state">
-        {searchQuery ? `${history.length} resultado(s) para "${searchQuery}"` : `${history.length} ingreso(s) recientes`}
+        {`${history.length} ingreso(s) recientes`}
       </p>
       <div className="table">
-        {history.length === 0 && <p className="empty-state">No hay registros que coincidan con la busqueda.</p>}
+        {history.length === 0 && <p className="empty-state">No hay registros recientes.</p>}
         {history.map((item) => {
           const draft = draftVisitors[item.id] || {
             fullName: item.full_name || '',
@@ -1993,16 +2000,12 @@ function App() {
   const [accessReport, setAccessReport] = useState(emptyAccessReport);
   const [reportRange, setReportRange] = useState({ from: weekAgo, to: today });
   const [error, setError] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchDraft, setSearchDraft] = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   function resetSessionState(message = '') {
     setUser(null);
     setActive('dashboard');
     setMenuOpen(false);
-    setSearchDraft('');
-    setSearchQuery('');
     setNotificationsOpen(false);
     setDashboard(emptyDashboard);
     setHistory([]);
@@ -2027,10 +2030,10 @@ function App() {
     }
     try {
       const historyRequest = user?.role === 'admin'
-        ? api(withSearch('/api/history', searchQuery), { headers: authHeaders(user) })
+        ? api('/api/history', { headers: authHeaders(user) })
         : Promise.resolve({ history: [] });
       const [dashboardData, historyData, qrData, reportData] = await Promise.all([
-        api(withSearch('/api/dashboard', searchQuery), { headers: authHeaders(user) }),
+        api('/api/dashboard', { headers: authHeaders(user) }),
         historyRequest,
         api('/api/qr-tickets', { headers: authHeaders(user) }),
         api('/api/reports', { headers: authHeaders(user) })
@@ -2060,29 +2063,6 @@ function App() {
       setActive('validar_qr');
     }
   }, [user, pendingQrCode]);
-
-  useEffect(() => {
-    if (!user) return undefined;
-    const timer = window.setTimeout(() => {
-      loadData();
-    }, 100);
-    return () => window.clearTimeout(timer);
-  }, [searchQuery]);
-
-  function applySearch(event) {
-    event?.preventDefault();
-    const nextSearch = searchDraft.trim();
-    if (nextSearch === searchQuery) {
-      loadData();
-      return;
-    }
-    setSearchQuery(nextSearch);
-  }
-
-  function clearSearch() {
-    setSearchDraft('');
-    setSearchQuery('');
-  }
 
   function consumePendingQrCode() {
     setPendingQrCode('');
@@ -2134,11 +2114,8 @@ function App() {
   }, [user, active, visibleNavItems]);
 
   const content = useMemo(() => {
-    const filteredRecent = dashboard.recent.filter((item) => matchesSearch(item, searchQuery));
-    const filteredHistory = history.filter((item) => matchesSearch(item, searchQuery));
-    const filteredDashboard = { ...dashboard, recent: filteredRecent };
     const currentItem = navItems.find((item) => item.id === active);
-    if (currentItem && !canAccess(currentItem, user)) return <Dashboard data={filteredDashboard} />;
+    if (currentItem && !canAccess(currentItem, user)) return <Dashboard data={dashboard} />;
     if (active === 'entrada') return <EntryModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
     if (active === 'salas') return <RoomsModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
     if (active === 'usuarios') return <UsersModule user={user} />;
@@ -2149,13 +2126,8 @@ function App() {
     if (active === 'historial') {
       return (
         <HistoryModule
-          history={filteredHistory}
+          history={history}
           user={user}
-          searchQuery={searchQuery}
-          searchDraft={searchDraft}
-          onSearchDraft={setSearchDraft}
-          onSearchSubmit={applySearch}
-          onClearSearch={clearSearch}
           onChanged={loadData}
         />
       );
@@ -2173,8 +2145,8 @@ function App() {
       );
     }
     if (active === 'auditoria') return <AuditModule user={user} />;
-    return <Dashboard data={filteredDashboard} />;
-  }, [active, dashboard, history, qrTickets, reports, user, searchQuery, searchDraft, accessReport, reportRange, notifications]);
+    return <Dashboard data={dashboard} />;
+  }, [active, dashboard, history, qrTickets, reports, user, accessReport, reportRange, notifications]);
 
   if (!user) return <Login onLogin={handleLogin} initialError={error} />;
 
@@ -2187,11 +2159,6 @@ function App() {
           title={activeTitle}
           onMenu={() => setMenuOpen(true)}
           user={user}
-          searchQuery={searchQuery}
-          searchDraft={searchDraft}
-          onSearchDraft={setSearchDraft}
-          onSearchSubmit={applySearch}
-          onClearSearch={clearSearch}
           notifications={notifications}
           notificationsOpen={notificationsOpen}
           onToggleNotifications={() => setNotificationsOpen((open) => !open)}
