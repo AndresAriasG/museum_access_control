@@ -3,8 +3,8 @@ BEGIN;
 INSERT INTO museum_auth_users (username, password_hash, first_name, last_name, role)
 VALUES
   ('admin@museo.gov', 'museum2026', 'Administrador', 'Museo', 'admin'),
-  ('operador@museo.gov', 'museum2026', 'Operador', 'Accesos', 'operator'),
-  ('accesos@museo.gov', 'museum2026', 'Control', 'Accesos', 'operator')
+  ('operador@museo.gov', 'museum2026', 'Operador', 'Accesos', 'registrar'),
+  ('accesos@museo.gov', 'museum2026', 'Control', 'Accesos', 'registrar')
 ON CONFLICT (username) DO NOTHING;
 
 INSERT INTO museum_rooms (name, capacity)

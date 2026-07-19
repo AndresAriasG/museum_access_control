@@ -695,7 +695,8 @@ select,
 .room-list,
 .table,
 .insight-grid,
-.room-admin-list {
+.room-admin-list,
+.user-admin-list {
   display: grid;
   gap: 12px;
 }
@@ -761,6 +762,43 @@ select,
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.user-admin-row {
+  display: grid;
+  gap: 12px;
+  border-radius: 14px;
+  padding: 14px;
+  background: var(--soft);
+}
+
+.user-admin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.user-admin-head div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.user-admin-head span,
+.status-check {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.user-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.status-check {
+  min-height: 38px;
 }
 
 .generated-qr-card,
@@ -1202,6 +1240,15 @@ mark {
 
   .room-edit-grid {
     grid-template-columns: 1fr;
+  }
+
+  .user-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .user-admin-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .row-actions {

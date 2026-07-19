@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS museum_auth_users (
   password_hash TEXT NOT NULL,
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL DEFAULT '',
-  role TEXT NOT NULL DEFAULT 'operator',
+  role TEXT NOT NULL DEFAULT 'registrar',
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

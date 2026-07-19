@@ -39,6 +39,16 @@ const DOCUMENT_TYPES = new Set([
   "Cedula de extranjeria"
 ]);
 
+const USER_ROLES = new Set(["admin", "registrar", "operator"]);
+
+function requireAdmin(req, res, next) {
+  if (req.headers["x-user-role"] !== "admin") {
+    return res.status(403).json({ error: "No tienes permisos para administrar usuarios" });
+  }
+
+  next();
+}
+
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
@@ -57,13 +67,141 @@ app.post("/api/access-users/init", requireDb, async (_req, res) => {
            role = EXCLUDED.role,
            updated_at = now()
        RETURNING id, username, first_name, last_name, role`,
-      ["accesos@museo.gov", "museum2026", "Control", "Accesos", "operator"]
+      ["accesos@museo.gov", "museum2026", "Control", "Accesos", "registrar"]
     );
 
     res.status(201).json({ user: result.rows[0] });
   } catch (error) {
     console.error("Access user init failed:", error);
     res.status(500).json({ error: "No se pudo crear el usuario de accesos" });
+  }
+});
+
+app.get("/api/auth-users", requireDb, requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, username, first_name, last_name, role, is_active, created_at, updated_at
+       FROM museum_auth_users
+       ORDER BY is_active DESC, created_at DESC`
+    );
+
+    res.json({ users: result.rows });
+  } catch (error) {
+    console.error("Users query failed:", error);
+    res.status(500).json({ error: "No se pudieron cargar los usuarios" });
+  }
+});
+
+app.post("/api/auth-users", requireDb, requireAdmin, async (req, res) => {
+  const { username, password, firstName, lastName, role } = req.body;
+  const cleanUsername = String(username || "").trim().toLowerCase();
+  const cleanPassword = String(password || "").trim();
+  const cleanFirstName = String(firstName || "").trim();
+  const cleanLastName = String(lastName || "").trim();
+  const cleanRole = String(role || "").trim();
+
+  if (!cleanUsername || !cleanPassword || !cleanFirstName || !cleanRole) {
+    return res.status(400).json({ error: "Usuario, contrasena, nombre y rol son obligatorios" });
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanUsername)) {
+    return res.status(400).json({ error: "El usuario debe tener formato de correo" });
+  }
+
+  if (cleanPassword.length < 8) {
+    return res.status(400).json({ error: "La contrasena debe tener al menos 8 caracteres" });
+  }
+
+  if (!USER_ROLES.has(cleanRole)) {
+    return res.status(400).json({ error: "Rol no valido" });
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO museum_auth_users (username, password_hash, first_name, last_name, role, is_active)
+       VALUES ($1, $2, $3, $4, $5, true)
+       ON CONFLICT (username) DO UPDATE
+       SET password_hash = EXCLUDED.password_hash,
+           first_name = EXCLUDED.first_name,
+           last_name = EXCLUDED.last_name,
+           role = EXCLUDED.role,
+           is_active = true,
+           updated_at = now()
+       RETURNING id, username, first_name, last_name, role, is_active, created_at, updated_at`,
+      [cleanUsername, cleanPassword, cleanFirstName, cleanLastName, cleanRole]
+    );
+
+    res.status(201).json({ user: result.rows[0] });
+  } catch (error) {
+    console.error("User creation failed:", error);
+    res.status(500).json({ error: "No se pudo guardar el usuario" });
+  }
+});
+
+app.patch("/api/auth-users/:id", requireDb, requireAdmin, async (req, res) => {
+  const { firstName, lastName, role, isActive, password } = req.body;
+  const cleanFirstName = String(firstName || "").trim();
+  const cleanLastName = String(lastName || "").trim();
+  const cleanRole = String(role || "").trim();
+  const hasPassword = String(password || "").trim().length > 0;
+  const cleanPassword = String(password || "").trim();
+
+  if (!cleanFirstName || !cleanRole) {
+    return res.status(400).json({ error: "Nombre y rol son obligatorios" });
+  }
+
+  if (!USER_ROLES.has(cleanRole)) {
+    return res.status(400).json({ error: "Rol no valido" });
+  }
+
+  if (hasPassword && cleanPassword.length < 8) {
+    return res.status(400).json({ error: "La contrasena debe tener al menos 8 caracteres" });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE museum_auth_users
+       SET first_name = $1,
+           last_name = $2,
+           role = $3,
+           is_active = $4,
+           password_hash = CASE WHEN $5 = '' THEN password_hash ELSE $5 END,
+           updated_at = now()
+       WHERE id = $6
+       RETURNING id, username, first_name, last_name, role, is_active, created_at, updated_at`,
+      [cleanFirstName, cleanLastName, cleanRole, Boolean(isActive), cleanPassword, req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    res.json({ user: result.rows[0] });
+  } catch (error) {
+    console.error("User update failed:", error);
+    res.status(500).json({ error: "No se pudo actualizar el usuario" });
+  }
+});
+
+app.delete("/api/auth-users/:id", requireDb, requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE museum_auth_users
+       SET is_active = false,
+           updated_at = now()
+       WHERE id = $1
+       RETURNING id, username, first_name, last_name, role, is_active, created_at, updated_at`,
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    res.json({ user: result.rows[0] });
+  } catch (error) {
+    console.error("User deactivate failed:", error);
+    res.status(500).json({ error: "No se pudo desactivar el usuario" });
   }
 });
 

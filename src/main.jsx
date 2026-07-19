@@ -35,13 +35,29 @@ const UsersRound = (props) => <Icon {...props}><path d="M16 21a6 6 0 0 0-12 0" /
 const X = (props) => <Icon {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
 
 const navItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'entrada', label: 'Registrar Entrada', icon: DoorOpen },
-  { id: 'salas', label: 'Servicios', icon: Gauge },
-  { id: 'qr', label: 'QR generados', icon: QrCode },
-  { id: 'historial', label: 'Historial', icon: History },
-  { id: 'reportes', label: 'Reportes', icon: BarChart3 }
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'registrar', 'operator'] },
+  { id: 'entrada', label: 'Registrar Entrada', icon: DoorOpen, roles: ['admin', 'registrar', 'operator'] },
+  { id: 'salas', label: 'Servicios', icon: Gauge, roles: ['admin'] },
+  { id: 'usuarios', label: 'Usuarios', icon: UserRound, roles: ['admin'] },
+  { id: 'qr', label: 'QR generados', icon: QrCode, roles: ['admin', 'registrar', 'operator'] },
+  { id: 'historial', label: 'Historial', icon: History, roles: ['admin', 'registrar', 'operator'] },
+  { id: 'reportes', label: 'Reportes', icon: BarChart3, roles: ['admin'] }
 ];
+
+const roleOptions = [
+  { value: 'admin', label: 'Administrador' },
+  { value: 'registrar', label: 'Registro' }
+];
+
+function roleLabel(role) {
+  if (role === 'admin') return 'Administrador';
+  if (role === 'registrar' || role === 'operator') return 'Registro';
+  return 'Usuario';
+}
+
+function canAccess(item, user) {
+  return item.roles.includes(user?.role);
+}
 
 const documentTypes = [
   'Cedula de ciudadania',
@@ -280,7 +296,7 @@ function Login({ onLogin }) {
   );
 }
 
-function Sidebar({ active, onChange, open, onClose }) {
+function Sidebar({ active, onChange, open, onClose, items }) {
   return (
     <>
       <aside className={`sidebar glass ${open ? 'is-open' : ''}`}>
@@ -293,7 +309,7 @@ function Sidebar({ active, onChange, open, onClose }) {
           <button className="icon-btn close-btn" onClick={onClose} aria-label="Cerrar menu"><X size={18} /></button>
         </div>
         <nav>
-          {navItems.map((item) => {
+          {items.map((item) => {
             const NavIcon = item.icon;
             return (
               <button key={item.id} className={active === item.id ? 'active' : ''} onClick={() => { onChange(item.id); onClose(); }}>
@@ -316,6 +332,7 @@ function Sidebar({ active, onChange, open, onClose }) {
 
 function Header({
   active,
+  title,
   onMenu,
   user,
   searchQuery,
@@ -327,7 +344,6 @@ function Header({
   notificationsOpen,
   onToggleNotifications
 }) {
-  const title = navItems.find((item) => item.id === active)?.label ?? 'Dashboard';
   return (
     <header className="topbar glass">
       <button className="icon-btn menu-btn" onClick={onMenu} aria-label="Abrir menu"><Menu size={21} /></button>
@@ -344,7 +360,7 @@ function Header({
           <button className="ghost-btn search-action" type="submit">Buscar</button>
           {searchQuery && <button className="ghost-btn search-action" type="button" onClick={onClearSearch}>Limpiar</button>}
         </form>
-        <span className="session-label">Sesion: {user?.first_name || 'Usuario'}</span>
+        <span className="session-label">{user?.first_name || 'Usuario'} · {roleLabel(user?.role)}</span>
         <div className="notification-wrap">
           <button className="icon-btn" type="button" onClick={onToggleNotifications} aria-label="Notificaciones"><Bell size={19} /></button>
           {notificationsOpen && (
@@ -915,6 +931,186 @@ function ReportsModule({ data, reports, accessReport, reportRange, onRangeChange
   );
 }
 
+function UsersModule({ user }) {
+  const [users, setUsers] = useState([]);
+  const [draftUsers, setDraftUsers] = useState({});
+  const [form, setForm] = useState({
+    username: '',
+    password: '',
+    firstName: '',
+    lastName: '',
+    role: 'registrar'
+  });
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState('');
+
+  const adminHeaders = { 'X-User-Role': user?.role || '' };
+
+  async function loadUsers() {
+    const data = await api('/api/auth-users', { headers: adminHeaders });
+    setUsers(data.users || []);
+  }
+
+  useEffect(() => {
+    loadUsers().catch((err) => setMessage(err.message));
+  }, []);
+
+  useEffect(() => {
+    setDraftUsers((current) => {
+      const next = {};
+      users.forEach((item) => {
+        next[item.id] = current[item.id] || {
+          firstName: item.first_name,
+          lastName: item.last_name || '',
+          role: item.role === 'operator' ? 'registrar' : item.role,
+          isActive: item.is_active,
+          password: ''
+        };
+      });
+      return next;
+    });
+  }, [users]);
+
+  function updateDraft(userId, values) {
+    setDraftUsers((current) => ({
+      ...current,
+      [userId]: { ...(current[userId] || {}), ...values }
+    }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage('');
+    try {
+      const data = await api('/api/auth-users', {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify(form)
+      });
+      setMessage(`Usuario guardado: ${data.user.username}`);
+      setForm({ username: '', password: '', firstName: '', lastName: '', role: 'registrar' });
+      await loadUsers();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function updateUser(item) {
+    const draft = draftUsers[item.id] || {};
+    setBusyId(item.id);
+    setMessage('');
+    try {
+      const data = await api(`/api/auth-users/${item.id}`, {
+        method: 'PATCH',
+        headers: adminHeaders,
+        body: JSON.stringify(draft)
+      });
+      setMessage(`Usuario actualizado: ${data.user.username}`);
+      await loadUsers();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function deactivateUser(item) {
+    const confirmed = window.confirm(`Desactivar el usuario ${item.username}?`);
+    if (!confirmed) return;
+    setBusyId(item.id);
+    setMessage('');
+    try {
+      await api(`/api/auth-users/${item.id}`, { method: 'DELETE', headers: adminHeaders });
+      setMessage(`Usuario desactivado: ${item.username}`);
+      await loadUsers();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  return (
+    <section className="module-layout">
+      <div className="panel glass">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Privilegios</p>
+            <h3>Crear usuario</h3>
+          </div>
+        </div>
+        <form className="stack-form" onSubmit={submit}>
+          <input required type="email" placeholder="Correo de acceso" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
+          <input required minLength="8" type="password" placeholder="Contrasena temporal" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+          <div className="form-grid">
+            <input required placeholder="Nombre" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} />
+            <input placeholder="Apellido" value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} />
+          </div>
+          <select required value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
+            {roleOptions.map((role) => <option value={role.value} key={role.value}>{role.label}</option>)}
+          </select>
+          {message && <p className="form-message">{message}</p>}
+          <button className="primary-btn" type="submit" disabled={loading}>
+            <CheckCircle2 size={18} />
+            {loading ? 'Guardando...' : 'Guardar usuario'}
+          </button>
+        </form>
+      </div>
+      <div className="panel glass wide">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Control de acceso</p>
+            <h3>Usuarios del sistema</h3>
+          </div>
+        </div>
+        <div className="user-admin-list">
+          {users.length === 0 && <p className="empty-state">No hay usuarios registrados.</p>}
+          {users.map((item) => {
+            const draft = draftUsers[item.id] || {
+              firstName: item.first_name,
+              lastName: item.last_name || '',
+              role: item.role === 'operator' ? 'registrar' : item.role,
+              isActive: item.is_active,
+              password: ''
+            };
+            return (
+              <article className="user-admin-row" key={item.id}>
+                <div className="user-admin-head">
+                  <div>
+                    <strong>{item.username}</strong>
+                    <span>{roleLabel(item.role)} · {item.is_active ? 'Activo' : 'Inactivo'}</span>
+                  </div>
+                  <mark>{item.is_active ? 'Activo' : 'Inactivo'}</mark>
+                </div>
+                <div className="user-edit-grid">
+                  <input required value={draft.firstName} onChange={(event) => updateDraft(item.id, { firstName: event.target.value })} />
+                  <input value={draft.lastName} onChange={(event) => updateDraft(item.id, { lastName: event.target.value })} />
+                  <select value={draft.role} onChange={(event) => updateDraft(item.id, { role: event.target.value })}>
+                    {roleOptions.map((role) => <option value={role.value} key={role.value}>{role.label}</option>)}
+                  </select>
+                  <input minLength="8" type="password" placeholder="Nueva contrasena" value={draft.password} onChange={(event) => updateDraft(item.id, { password: event.target.value })} />
+                </div>
+                <div className="row-actions">
+                  <label className="checkline status-check">
+                    <input type="checkbox" checked={Boolean(draft.isActive)} onChange={(event) => updateDraft(item.id, { isActive: event.target.checked })} />
+                    Activo
+                  </label>
+                  <button className="primary-btn compact-btn" type="button" disabled={busyId === item.id} onClick={() => updateUser(item)}>Actualizar</button>
+                  <button className="ghost-btn danger-btn" type="button" disabled={busyId === item.id || item.id === user?.id} onClick={() => deactivateUser(item)}>Desactivar</button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function IntegrationStatus() {
   return (
     <div className="integration-card glass">
@@ -1020,12 +1216,25 @@ function App() {
     return items;
   }, [dashboard]);
 
+  const visibleNavItems = useMemo(() => navItems.filter((item) => canAccess(item, user)), [user]);
+  const activeTitle = visibleNavItems.find((item) => item.id === active)?.label ?? 'Dashboard';
+
+  useEffect(() => {
+    if (!user) return;
+    if (!visibleNavItems.some((item) => item.id === active)) {
+      setActive(visibleNavItems[0]?.id || 'dashboard');
+    }
+  }, [user, active, visibleNavItems]);
+
   const content = useMemo(() => {
     const filteredRecent = dashboard.recent.filter((item) => matchesSearch(item, searchQuery));
     const filteredHistory = history.filter((item) => matchesSearch(item, searchQuery));
     const filteredDashboard = { ...dashboard, recent: filteredRecent };
+    const currentItem = navItems.find((item) => item.id === active);
+    if (currentItem && !canAccess(currentItem, user)) return <Dashboard data={filteredDashboard} />;
     if (active === 'entrada') return <EntryModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
     if (active === 'salas') return <RoomsModule rooms={dashboard.rooms} onSaved={loadData} />;
+    if (active === 'usuarios') return <UsersModule user={user} />;
     if (active === 'qr') return <QrModule history={history} />;
     if (active === 'historial') {
       return (
@@ -1058,10 +1267,11 @@ function App() {
 
   return (
     <main className="app-shell">
-      <Sidebar active={active} onChange={setActive} open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <Sidebar active={active} onChange={setActive} open={menuOpen} onClose={() => setMenuOpen(false)} items={visibleNavItems} />
       <section className="content-shell">
         <Header
           active={active}
+          title={activeTitle}
           onMenu={() => setMenuOpen(true)}
           user={user}
           searchQuery={searchQuery}
