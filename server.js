@@ -5,12 +5,21 @@ const { Pool } = require("pg");
 
 const app = express();
 const distPath = path.join(__dirname, "dist");
+const isProduction = process.env.NODE_ENV === "production";
 const authSecret = process.env.APP_SECRET || crypto.randomBytes(32).toString("hex");
 const tokenTtlMs = Number(process.env.SESSION_TTL_MS || 8 * 60 * 60 * 1000);
 const loginAttempts = new Map();
 
 if (!process.env.APP_SECRET) {
   console.warn("APP_SECRET is not configured. Sessions will reset on server restart.");
+}
+
+function requireAppSecret(_req, res, next) {
+  if (isProduction && !process.env.APP_SECRET) {
+    return res.status(503).json({ error: "APP_SECRET no esta configurado en el servidor" });
+  }
+
+  return next();
 }
 
 app.use(express.urlencoded({ extended: true }));
@@ -452,7 +461,7 @@ app.get("/api/role-profiles", requireDb, requireAdmin, async (_req, res) => {
   }
 });
 
-app.post("/api/login", requireDb, async (req, res) => {
+app.post("/api/login", requireDb, requireAppSecret, async (req, res) => {
   const { username, password } = req.body;
   const cleanUsername = String(username || "").trim().toLowerCase();
   const cleanPassword = String(password || "");

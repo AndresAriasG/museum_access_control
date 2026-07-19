@@ -81,7 +81,11 @@ async function api(path, options = {}) {
     headers: { 'Content-Type': 'application/json', ...headers }
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Error de conexion');
+  if (!response.ok) {
+    const error = new Error(data.error || 'Error de conexion');
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 
@@ -244,11 +248,15 @@ function QRCodeImage({ value, label }) {
   );
 }
 
-function Login({ onLogin }) {
+function Login({ onLogin, initialError = '' }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setError(initialError);
+  }, [initialError]);
 
   async function submit(event) {
     event.preventDefault();
@@ -259,6 +267,9 @@ function Login({ onLogin }) {
         method: 'POST',
         body: JSON.stringify({ username, password })
       });
+      if (!data.user?.token) {
+        throw new Error('No se pudo iniciar una sesion segura. Revisa APP_SECRET y vuelve a intentar.');
+      }
       onLogin(data.user);
     } catch (err) {
       setError(err.message);
@@ -1926,6 +1937,22 @@ function App() {
   const [searchDraft, setSearchDraft] = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
+  function resetSessionState(message = '') {
+    setUser(null);
+    setActive('dashboard');
+    setMenuOpen(false);
+    setSearchDraft('');
+    setSearchQuery('');
+    setNotificationsOpen(false);
+    setDashboard(emptyDashboard);
+    setHistory([]);
+    setQrTickets([]);
+    setReports({});
+    setAccessReport(emptyAccessReport);
+    setPendingQrCode('');
+    setError(message);
+  }
+
   async function loadAccessReport(range = reportRange) {
     const params = new URLSearchParams({ from: range.from, to: range.to });
     const data = await api(`/api/reports/accesses?${params.toString()}`, { headers: authHeaders(user) });
@@ -1934,6 +1961,10 @@ function App() {
 
   async function loadData() {
     setError('');
+    if (!user?.token) {
+      resetSessionState('No hay una sesion segura activa. Ingresa de nuevo.');
+      return;
+    }
     try {
       const historyRequest = user?.role === 'admin'
         ? api(withSearch('/api/history', searchQuery), { headers: authHeaders(user) })
@@ -1950,6 +1981,10 @@ function App() {
       setReports(reportData.reports || {});
       await loadAccessReport();
     } catch (err) {
+      if (err.status === 401) {
+        resetSessionState('Tu sesion vencio o fue reiniciada. Ingresa de nuevo.');
+        return;
+      }
       setError(err.message);
     }
   }
@@ -2006,19 +2041,12 @@ function App() {
         body: JSON.stringify({ action: 'logout', entityType: 'session', entityId: currentUser.id })
       }).catch(() => {});
     }
-    setUser(null);
-    setActive('dashboard');
-    setMenuOpen(false);
-    setSearchDraft('');
-    setSearchQuery('');
-    setNotificationsOpen(false);
-    setDashboard(emptyDashboard);
-    setHistory([]);
-    setQrTickets([]);
-    setReports({});
-    setAccessReport(emptyAccessReport);
+    resetSessionState('');
+  }
+
+  function handleLogin(nextUser) {
     setError('');
-    setPendingQrCode('');
+    setUser(nextUser);
   }
 
   const notifications = useMemo(() => {
@@ -2088,7 +2116,7 @@ function App() {
     return <Dashboard data={filteredDashboard} />;
   }, [active, dashboard, history, qrTickets, reports, user, searchQuery, searchDraft, accessReport, reportRange, notifications]);
 
-  if (!user) return <Login onLogin={setUser} />;
+  if (!user) return <Login onLogin={handleLogin} initialError={error} />;
 
   return (
     <main className="app-shell">
