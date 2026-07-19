@@ -52,6 +52,8 @@ Luego crea los demas usuarios desde el modulo `Usuarios`.
 5. El QR se puede ampliar, descargar como PNG, imprimir o validar desde el modulo `Validar QR`.
 6. Reportes e historial se actualizan con los accesos registrados.
 
+El dashboard operativo considera actividad vigente de 3 horas para `Visitantes dentro`, `Servicios activos`, `Servicios en uso` y `Ultimos ingresos`.
+
 ## Entrega de QR al visitante
 
 Desde `QR generados`:

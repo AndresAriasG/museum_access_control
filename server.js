@@ -643,16 +643,38 @@ app.get("/api/dashboard", requireDb, requireAuth, async (req, res) => {
 
   try {
     const [kpis, hourly, weekly, rooms, recent, reports] = await Promise.all([
-      pool.query("SELECT * FROM museum_daily_kpis LIMIT 1"),
+      pool.query(
+        `WITH active_entries AS (
+           SELECT ae.room_id
+           FROM museum_access_entries ae
+           LEFT JOIN museum_qr_tickets t ON t.id = ae.ticket_id
+           WHERE ae.status = 'inside'
+             AND ae.entered_at >= now() - interval '3 hours'
+             AND (t.id IS NULL OR (t.status = 'active' AND t.valid_until >= now()))
+         )
+         SELECT
+           COUNT(*) FILTER (WHERE ae.entered_at::date = CURRENT_DATE AND ae.status <> 'voided')::int AS visitors_today,
+           COUNT(*) FILTER (WHERE ae.entered_at::date = CURRENT_DATE AND ae.ticket_id IS NOT NULL AND ae.status <> 'voided')::int AS qr_validations_today,
+           (SELECT COUNT(*)::int FROM active_entries) AS visitors_inside,
+           (SELECT COUNT(DISTINCT room_id)::int FROM active_entries WHERE room_id IS NOT NULL) AS active_services,
+           COALESCE((
+             SELECT SUM(r.capacity)::int
+             FROM museum_rooms r
+             WHERE r.is_active = true
+               AND r.id IN (SELECT DISTINCT room_id FROM active_entries WHERE room_id IS NOT NULL)
+           ), 0) AS active_capacity
+         FROM museum_access_entries ae`
+      ),
       pool.query(
         `SELECT to_char(hour_bucket, 'HH24:00') AS label, COUNT(ae.id)::int AS value
          FROM generate_series(
-           date_trunc('hour', now()) - interval '9 hours',
+           date_trunc('hour', now()) - interval '3 hours',
            date_trunc('hour', now()),
            interval '1 hour'
          ) hour_bucket
          LEFT JOIN museum_access_entries ae
            ON date_trunc('hour', ae.entered_at) = hour_bucket
+          AND ae.status <> 'voided'
          GROUP BY hour_bucket
          ORDER BY hour_bucket`
       ),
@@ -667,20 +689,32 @@ app.get("/api/dashboard", requireDb, requireAuth, async (req, res) => {
          ) day_bucket
          LEFT JOIN museum_access_entries ae
            ON ae.entered_at::date = day_bucket::date
+          AND ae.status <> 'voided'
          GROUP BY day_bucket
          ORDER BY day_bucket`
       ),
       pool.query(
-        `SELECT r.id,
+        `WITH room_activity AS (
+           SELECT ae.room_id, COUNT(*)::int AS active_count
+           FROM museum_access_entries ae
+           LEFT JOIN museum_qr_tickets t ON t.id = ae.ticket_id
+           WHERE ae.status = 'inside'
+             AND ae.entered_at >= now() - interval '3 hours'
+             AND (t.id IS NULL OR (t.status = 'active' AND t.valid_until >= now()))
+           GROUP BY ae.room_id
+         )
+         SELECT r.id,
                 r.name,
                 r.capacity,
-                COUNT(ae.id) FILTER (WHERE ae.status = 'inside')::int AS inside,
-                LEAST(100, ROUND((COUNT(ae.id) FILTER (WHERE ae.status = 'inside')::numeric / r.capacity) * 100))::int AS occupancy
+                COALESCE(ra.active_count, 0)::int AS inside,
+                CASE
+                  WHEN COALESCE(ra.active_count, 0) = 0 THEN 0
+                  ELSE LEAST(100, ROUND((ra.active_count::numeric / r.capacity) * 100))::int
+                END AS occupancy
          FROM museum_rooms r
-         LEFT JOIN museum_access_entries ae ON ae.room_id = r.id
+         LEFT JOIN room_activity ra ON ra.room_id = r.id
          WHERE r.is_active = true
-         GROUP BY r.id, r.name, r.capacity
-         ORDER BY r.name`
+         ORDER BY COALESCE(ra.active_count, 0) DESC, r.name`
       ),
       pool.query(
         `SELECT ae.id,
@@ -698,17 +732,20 @@ app.get("/api/dashboard", requireDb, requireAuth, async (req, res) => {
          JOIN museum_visitors v ON v.id = ae.visitor_id
          LEFT JOIN museum_rooms r ON r.id = ae.room_id
          LEFT JOIN museum_qr_tickets t ON t.id = ae.ticket_id
-         WHERE ($1 = ''
-           OR v.full_name ILIKE $2
-           OR v.visitor_type ILIKE $2
-           OR v.document_type ILIKE $2
-           OR v.document_number ILIKE $2
-           OR v.phone ILIKE $2
-           OR v.country ILIKE $2
-           OR v.city ILIKE $2
-           OR r.name ILIKE $2
-           OR t.ticket_code ILIKE $2
-           OR ae.status ILIKE $2)
+         WHERE ae.status <> 'voided'
+           AND ae.entered_at >= now() - interval '3 hours'
+           AND (t.id IS NULL OR (t.status = 'active' AND t.valid_until >= now()))
+           AND ($1 = ''
+             OR v.full_name ILIKE $2
+             OR v.visitor_type ILIKE $2
+             OR v.document_type ILIKE $2
+             OR v.document_number ILIKE $2
+             OR v.phone ILIKE $2
+             OR v.country ILIKE $2
+             OR v.city ILIKE $2
+             OR r.name ILIKE $2
+             OR t.ticket_code ILIKE $2
+             OR ae.status ILIKE $2)
          ORDER BY ae.entered_at DESC
          LIMIT 8`,
         [search, recentSearch]
@@ -719,6 +756,7 @@ app.get("/api/dashboard", requireDb, requireAuth, async (req, res) => {
              (SELECT to_char(date_trunc('hour', entered_at), 'HH24:00') || ' - ' || to_char(date_trunc('hour', entered_at) + interval '1 hour', 'HH24:00')
               FROM museum_access_entries
               WHERE entered_at >= now() - interval '7 days'
+                AND status <> 'voided'
               GROUP BY date_trunc('hour', entered_at)
               ORDER BY COUNT(*) DESC
               LIMIT 1),
@@ -729,6 +767,7 @@ app.get("/api/dashboard", requireDb, requireAuth, async (req, res) => {
               FROM museum_access_entries ae
               JOIN museum_rooms r ON r.id = ae.room_id
               WHERE ae.entered_at >= now() - interval '7 days'
+                AND ae.status <> 'voided'
               GROUP BY r.name
               ORDER BY COUNT(*) DESC
               LIMIT 1),
@@ -739,6 +778,7 @@ app.get("/api/dashboard", requireDb, requireAuth, async (req, res) => {
               FROM museum_access_entries ae
               JOIN museum_visitors v ON v.id = ae.visitor_id
               WHERE ae.entered_at >= now() - interval '7 days'
+                AND ae.status <> 'voided'
               GROUP BY v.country, v.city
               ORDER BY COUNT(*) DESC
               LIMIT 1),
@@ -750,7 +790,8 @@ app.get("/api/dashboard", requireDb, requireAuth, async (req, res) => {
            ) AS qr_conversion,
            COUNT(*)::int AS total_visitors
          FROM museum_access_entries
-         WHERE entered_at >= now() - interval '7 days'`
+         WHERE entered_at >= now() - interval '7 days'
+           AND status <> 'voided'`
       )
     ]);
 
@@ -762,7 +803,8 @@ app.get("/api/dashboard", requireDb, requireAuth, async (req, res) => {
         visitorsToday: Number(kpiRow.visitors_today || 0),
         qrValidationsToday: Number(kpiRow.qr_validations_today || 0),
         visitorsInside: Number(kpiRow.visitors_inside || 0),
-        totalCapacity: rooms.rows.reduce((sum, room) => sum + Number(room.capacity || 0), 0)
+        activeServices: Number(kpiRow.active_services || 0),
+        totalCapacity: Number(kpiRow.active_capacity || 0)
       },
       hourly: hourly.rows,
       weekly: weekly.rows,

@@ -466,11 +466,13 @@ function VisitorTable({ visitors = [], wide = false }) {
 }
 
 function Dashboard({ data }) {
+  const activeRooms = data.rooms.filter((room) => Number(room.inside || 0) > 0);
+  const roomMax = Math.max(...activeRooms.map((room) => Number(room.inside || 0)), 1);
   const kpis = [
     { label: 'Visitantes hoy', value: data.kpis.visitorsToday, delta: 'Actualizado', icon: UsersRound, tone: 'cyan' },
     { label: 'QR validados hoy', value: data.kpis.qrValidationsToday, delta: 'Tickets usados', icon: TicketCheck, tone: 'green' },
-    { label: 'Visitantes dentro', value: data.kpis.visitorsInside, delta: `${data.kpis.totalCapacity} capacidad`, icon: Gauge, tone: 'amber' },
-    { label: 'Servicios activos', value: data.rooms.length, delta: 'Operativos', icon: ShieldCheck, tone: 'rose' }
+    { label: 'Visitantes dentro', value: data.kpis.visitorsInside, delta: data.kpis.totalCapacity ? `${data.kpis.totalCapacity} capacidad activa` : 'Ultimas 3 horas', icon: Gauge, tone: 'amber' },
+    { label: 'Servicios activos', value: data.kpis.activeServices ?? activeRooms.length, delta: 'Ultimas 3 horas', icon: ShieldCheck, tone: 'rose' }
   ];
   const max = Math.max(...data.hourly.map((item) => Number(item.value)), 1);
   const weeklyMax = Math.max(...data.weekly.map((item) => Number(item.value)), 1);
@@ -493,16 +495,17 @@ function Dashboard({ data }) {
       <section className="panel glass">
         <div className="panel-head">
           <div>
-            <p className="eyebrow">Estado operacional</p>
-            <h3>Servicios activos</h3>
+            <p className="eyebrow">Ultimas 3 horas</p>
+            <h3>Servicios en uso</h3>
           </div>
         </div>
         <div className="room-list">
-          {data.rooms.map((room) => (
+          {activeRooms.length === 0 && <p className="empty-state">No hay servicios con actividad vigente.</p>}
+          {activeRooms.map((room) => (
             <div className="room-row" key={room.id}>
               <span>{room.name}</span>
-              <div><i style={{ width: `${room.occupancy || 0}%` }} /></div>
-              <strong>{room.occupancy || 0}%</strong>
+              <div><i style={{ width: `${Math.max(10, (Number(room.inside || 0) / roomMax) * 100)}%` }} /></div>
+              <strong>{room.inside || 0}/{room.capacity}</strong>
             </div>
           ))}
         </div>
@@ -529,7 +532,7 @@ function Dashboard({ data }) {
       <section className="panel glass full">
         <div className="panel-head">
           <div>
-            <p className="eyebrow">Detalle horario</p>
+            <p className="eyebrow">Ultimas 3 horas</p>
             <h3>Accesos por hora</h3>
           </div>
         </div>
@@ -1967,7 +1970,7 @@ function IntegrationStatus() {
 }
 
 const emptyDashboard = {
-  kpis: { visitorsToday: 0, qrValidationsToday: 0, visitorsInside: 0, totalCapacity: 0 },
+  kpis: { visitorsToday: 0, qrValidationsToday: 0, visitorsInside: 0, activeServices: 0, totalCapacity: 0 },
   hourly: [],
   weekly: [],
   rooms: [],
