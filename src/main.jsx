@@ -106,6 +106,7 @@ function matchesSearch(item, query) {
     item.visitor_type,
     item.document_type,
     item.document_number,
+    item.email,
     item.phone,
     item.room,
     item.ticket_code,
@@ -118,7 +119,7 @@ function matchesSearch(item, query) {
 }
 
 function exportCsv(rows) {
-  const headers = ['Nombre', 'Tipo visitante', 'Tipo documento', 'Documento', 'Telefono', 'Servicio', 'Fecha/Hora', 'Estado', 'QR', 'Ciudad', 'Pais', 'Validado por'];
+  const headers = ['Nombre', 'Tipo visitante', 'Tipo documento', 'Documento', 'Email', 'Telefono', 'Servicio', 'Fecha/Hora', 'Estado', 'QR', 'Ciudad', 'Pais', 'Validado por'];
   const escape = (value) => `"${String(value || '').replace(/"/g, '""')}"`;
   const csv = [
     headers.join(','),
@@ -127,6 +128,7 @@ function exportCsv(rows) {
       row.visitor_type,
       row.document_type,
       row.document_number,
+      row.email,
       row.phone,
       row.room,
       row.entered_at || row.time,
@@ -1315,7 +1317,84 @@ function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
   );
 }
 
-function HistoryModule({ history, searchQuery, searchDraft, onSearchDraft, onSearchSubmit, onClearSearch }) {
+function HistoryModule({ history, user, searchQuery, searchDraft, onSearchDraft, onSearchSubmit, onClearSearch, onChanged }) {
+  const [draftVisitors, setDraftVisitors] = useState({});
+  const [voidReasons, setVoidReasons] = useState({});
+  const [busyId, setBusyId] = useState('');
+  const [message, setMessage] = useState('');
+  const isAdmin = user?.role === 'admin';
+
+  useEffect(() => {
+    setDraftVisitors((current) => {
+      const next = {};
+      history.forEach((item) => {
+        next[item.id] = current[item.id] || {
+          fullName: item.full_name || '',
+          documentType: item.document_type || documentTypes[0],
+          documentNumber: item.document_number || '',
+          visitorType: item.visitor_type || 'General',
+          email: item.email || '',
+          phone: item.phone || '',
+          country: item.country || '',
+          city: item.city || ''
+        };
+      });
+      return next;
+    });
+  }, [history]);
+
+  function updateDraft(entryId, values) {
+    setDraftVisitors((current) => ({
+      ...current,
+      [entryId]: { ...(current[entryId] || {}), ...values }
+    }));
+  }
+
+  async function updateVisitor(item) {
+    const draft = draftVisitors[item.id] || {};
+    setBusyId(item.id);
+    setMessage('');
+    try {
+      await api(`/api/visitors/${item.visitor_id}`, {
+        method: 'PATCH',
+        headers: authHeaders(user),
+        body: JSON.stringify(draft)
+      });
+      setMessage(`Visitante actualizado: ${draft.fullName}`);
+      await onChanged();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function voidAccess(item) {
+    const reason = String(voidReasons[item.id] || '').trim();
+    if (reason.length < 8) {
+      setMessage('Escribe un motivo de anulacion de al menos 8 caracteres.');
+      return;
+    }
+    const confirmed = window.confirm(`Anular el acceso de ${item.full_name}?`);
+    if (!confirmed) return;
+    setBusyId(item.id);
+    setMessage('');
+    try {
+      await api(`/api/access-entries/${item.id}/void`, {
+        method: 'POST',
+        headers: authHeaders(user),
+        body: JSON.stringify({ reason })
+      });
+      setVoidReasons((current) => ({ ...current, [item.id]: '' }));
+      setMessage(`Acceso anulado: ${item.full_name}`);
+      await onChanged();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusyId('');
+    }
+  }
+
   return (
     <section className="panel glass full">
       <div className="panel-head">
@@ -1335,22 +1414,68 @@ function HistoryModule({ history, searchQuery, searchDraft, onSearchDraft, onSea
           Exportar CSV
         </button>
       </form>
+      {message && <p className="form-message">{message}</p>}
       <p className="empty-state">
         {searchQuery ? `${history.length} resultado(s) para "${searchQuery}"` : `${history.length} ingreso(s) recientes`}
       </p>
       <div className="table">
         {history.length === 0 && <p className="empty-state">No hay registros que coincidan con la busqueda.</p>}
-        {history.map((item) => (
-          <div className="table-row history-row" key={item.id}>
-            <div>
-              <strong>{item.full_name}</strong>
-              <span>{[item.ticket_code || 'Sin QR', [item.document_type, item.document_number].filter(Boolean).join(': '), item.phone, [item.city, item.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos'}</span>
-            </div>
-            <span>{item.room}</span>
-            <span>{item.entered_at}</span>
-            <mark>{item.status}</mark>
-          </div>
-        ))}
+        {history.map((item) => {
+          const draft = draftVisitors[item.id] || {
+            fullName: item.full_name || '',
+            documentType: item.document_type || documentTypes[0],
+            documentNumber: item.document_number || '',
+            visitorType: item.visitor_type || 'General',
+            email: item.email || '',
+            phone: item.phone || '',
+            country: item.country || '',
+            city: item.city || ''
+          };
+          return (
+            <article className="history-admin-card" key={item.id}>
+              <div className="table-row history-row">
+                <div>
+                  <strong>{item.full_name}</strong>
+                  <span>{[item.ticket_code || 'Sin QR', [item.document_type, item.document_number].filter(Boolean).join(': '), item.phone, [item.city, item.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Sin datos'}</span>
+                </div>
+                <span>{item.room}</span>
+                <span>{item.entered_at}</span>
+                <mark>{item.status}</mark>
+              </div>
+              {isAdmin && (
+                <div className="history-admin-tools">
+                  <div className="history-edit-grid">
+                    <input value={draft.fullName} onChange={(event) => updateDraft(item.id, { fullName: event.target.value })} />
+                    <select value={draft.documentType} onChange={(event) => updateDraft(item.id, { documentType: event.target.value })}>
+                      {documentTypes.map((type) => <option value={type} key={type}>{type}</option>)}
+                    </select>
+                    <input value={draft.documentNumber} onChange={(event) => updateDraft(item.id, { documentNumber: event.target.value })} />
+                    <select value={draft.visitorType} onChange={(event) => updateDraft(item.id, { visitorType: event.target.value })}>
+                      <option>General</option>
+                      <option>VIP</option>
+                      <option>Estudiante</option>
+                      <option>Grupo</option>
+                    </select>
+                    <input type="email" placeholder="Email opcional" value={draft.email} onChange={(event) => updateDraft(item.id, { email: event.target.value })} />
+                    <input placeholder="Telefono opcional" value={draft.phone} onChange={(event) => updateDraft(item.id, { phone: event.target.value })} />
+                    <input value={draft.country} onChange={(event) => updateDraft(item.id, { country: event.target.value })} />
+                    <input value={draft.city} onChange={(event) => updateDraft(item.id, { city: event.target.value })} />
+                  </div>
+                  <div className="void-access-row">
+                    <input
+                      placeholder="Motivo para anular este acceso"
+                      value={voidReasons[item.id] || ''}
+                      onChange={(event) => setVoidReasons((current) => ({ ...current, [item.id]: event.target.value }))}
+                      disabled={item.status === 'voided'}
+                    />
+                    <button className="primary-btn compact-btn" type="button" disabled={busyId === item.id} onClick={() => updateVisitor(item)}>Corregir datos</button>
+                    <button className="ghost-btn danger-btn" type="button" disabled={busyId === item.id || item.status === 'voided'} onClick={() => voidAccess(item)}>Anular acceso</button>
+                  </div>
+                </div>
+              )}
+            </article>
+          );
+        })}
       </div>
     </section>
   );
@@ -1656,6 +1781,8 @@ const actionLabels = {
   service_updated: 'Servicio actualizado',
   service_deactivated: 'Servicio desactivado',
   access_entry_created: 'Entrada registrada',
+  access_entry_voided: 'Acceso anulado',
+  visitor_updated: 'Visitante actualizado',
   qr_validation_approved: 'QR aprobado',
   qr_validation_rejected: 'QR rechazado',
   qr_validation_not_found: 'QR no encontrado'
@@ -1930,11 +2057,13 @@ function App() {
       return (
         <HistoryModule
           history={filteredHistory}
+          user={user}
           searchQuery={searchQuery}
           searchDraft={searchDraft}
           onSearchDraft={setSearchDraft}
           onSearchSubmit={applySearch}
           onClearSearch={clearSearch}
+          onChanged={loadData}
         />
       );
     }

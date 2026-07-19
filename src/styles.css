@@ -970,6 +970,33 @@ select,
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(130px, 1fr) minmax(88px, auto);
 }
 
+.history-admin-card {
+  display: grid;
+  gap: 10px;
+}
+
+.history-admin-tools {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.history-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.void-access-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
 .audit-row {
   grid-template-columns: minmax(0, 1.5fr) minmax(140px, 0.8fr) minmax(130px, 0.9fr) minmax(150px, 0.9fr) minmax(88px, auto);
 }
@@ -1356,6 +1383,11 @@ mark {
   }
 
   .user-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .history-edit-grid,
+  .void-access-row {
     grid-template-columns: 1fr;
   }
 

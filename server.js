@@ -751,6 +751,7 @@ app.post("/api/qr/validate", requireDb, async (req, res) => {
               v.visitor_type,
               v.document_type,
               v.document_number,
+              v.email,
               v.phone,
               v.country,
               v.city
@@ -802,10 +803,12 @@ app.get("/api/history", requireDb, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT ae.id,
+              ae.visitor_id,
               v.full_name,
               v.visitor_type,
               v.document_type,
               v.document_number,
+              v.email,
               v.phone,
               v.country,
               v.city,
@@ -825,6 +828,7 @@ app.get("/api/history", requireDb, async (req, res) => {
          OR v.visitor_type ILIKE $2
          OR v.document_type ILIKE $2
          OR v.document_number ILIKE $2
+         OR v.email ILIKE $2
          OR v.phone ILIKE $2
          OR v.country ILIKE $2
          OR v.city ILIKE $2
@@ -842,6 +846,130 @@ app.get("/api/history", requireDb, async (req, res) => {
   } catch (error) {
     console.error("History query failed:", error);
     res.status(500).json({ error: "No se pudo cargar el historial" });
+  }
+});
+
+app.patch("/api/visitors/:id", requireDb, requireAdmin, async (req, res) => {
+  const { fullName, documentType, documentNumber, visitorType, email, phone, country, city } = req.body;
+  const cleanName = String(fullName || "").trim();
+  const cleanDocumentType = normalizeDocumentType(documentType);
+  const rawDocumentType = String(documentType || "").trim();
+  const cleanDocumentNumber = String(documentNumber || "").trim();
+  const cleanVisitorType = String(visitorType || "General").trim() || "General";
+  const cleanEmail = String(email || "").trim();
+  const cleanPhone = String(phone || "").trim();
+  const cleanCountry = String(country || "").trim();
+  const cleanCity = String(city || "").trim();
+
+  const missingFields = [
+    ["Nombre", cleanName],
+    ["Tipo de documento", rawDocumentType],
+    ["Documento", cleanDocumentNumber],
+    ["Pais", cleanCountry],
+    ["Ciudad", cleanCity]
+  ].filter(([, value]) => !String(value || "").trim()).map(([label]) => label);
+
+  if (missingFields.length > 0) {
+    return res.status(400).json({ error: `Faltan campos obligatorios: ${missingFields.join(", ")}` });
+  }
+
+  if (!/^[\p{L}\s]+$/u.test(cleanName)) {
+    return res.status(400).json({ error: "El nombre solo debe contener letras y espacios" });
+  }
+
+  if (!cleanDocumentType) {
+    return res.status(400).json({ error: "Selecciona un tipo de documento valido" });
+  }
+
+  if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return res.status(400).json({ error: "El email debe tener un formato valido" });
+  }
+
+  if (cleanPhone && !/^[0-9+\s()-]{7,20}$/.test(cleanPhone)) {
+    return res.status(400).json({ error: "El telefono debe tener un formato valido" });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE museum_visitors
+       SET full_name = $1,
+           document_type = $2,
+           document_number = $3,
+           visitor_type = $4,
+           email = $5,
+           phone = $6,
+           country = $7,
+           city = $8
+       WHERE id = $9
+       RETURNING id, full_name, document_type, document_number, visitor_type, email, phone, country, city`,
+      [cleanName, cleanDocumentType, cleanDocumentNumber, cleanVisitorType, cleanEmail || null, cleanPhone || null, cleanCountry, cleanCity, req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Visitante no encontrado" });
+    }
+
+    await auditLog(pool, req, "visitor_updated", "visitor", result.rows[0].id, {
+      visitorName: result.rows[0].full_name,
+      documentType: result.rows[0].document_type,
+      documentNumber: result.rows[0].document_number
+    });
+
+    res.json({ visitor: result.rows[0] });
+  } catch (error) {
+    console.error("Visitor update failed:", error);
+    res.status(500).json({ error: "No se pudo actualizar el visitante" });
+  }
+});
+
+app.post("/api/access-entries/:id/void", requireDb, requireAdmin, async (req, res) => {
+  const reason = String(req.body.reason || "").trim();
+
+  if (reason.length < 8) {
+    return res.status(400).json({ error: "Escribe un motivo de anulacion de al menos 8 caracteres" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      `UPDATE museum_access_entries
+       SET status = 'voided',
+           exited_at = COALESCE(exited_at, now()),
+           notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $1)
+       WHERE id = $2
+       RETURNING id, visitor_id, ticket_id, status`,
+      [`Anulado: ${reason}`, req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Acceso no encontrado" });
+    }
+
+    if (result.rows[0].ticket_id) {
+      await client.query(
+        `UPDATE museum_qr_tickets
+         SET status = 'voided'
+         WHERE id = $1`,
+        [result.rows[0].ticket_id]
+      );
+    }
+
+    await auditLog(client, req, "access_entry_voided", "access_entry", result.rows[0].id, {
+      visitorId: result.rows[0].visitor_id,
+      ticketId: result.rows[0].ticket_id,
+      reason
+    });
+
+    await client.query("COMMIT");
+    res.json({ entry: result.rows[0] });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Access void failed:", error);
+    res.status(500).json({ error: "No se pudo anular el acceso" });
+  } finally {
+    client.release();
   }
 });
 
