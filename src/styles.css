@@ -537,6 +537,13 @@ select,
   white-space: nowrap;
 }
 
+.logout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
 .view-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));

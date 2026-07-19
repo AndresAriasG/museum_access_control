@@ -24,6 +24,7 @@ const History = (props) => <Icon {...props}><path d="M3 12a9 9 0 1 0 3-6.7" /><p
 const LayoutDashboard = (props) => <Icon {...props}><rect x="3" y="3" width="8" height="8" rx="2" /><rect x="13" y="3" width="8" height="5" rx="2" /><rect x="13" y="10" width="8" height="11" rx="2" /><rect x="3" y="13" width="8" height="8" rx="2" /></Icon>;
 const LockKeyhole = (props) => <Icon {...props}><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /><path d="M12 15v2" /></Icon>;
 const LogIn = (props) => <Icon {...props}><path d="M14 3h5v18h-5" /><path d="M10 17l5-5-5-5" /><path d="M15 12H3" /></Icon>;
+const LogOut = (props) => <Icon {...props}><path d="M10 17 5 12l5-5" /><path d="M5 12h12" /><path d="M14 3h5v18h-5" /></Icon>;
 const Menu = (props) => <Icon {...props}><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></Icon>;
 const QrCode = (props) => <Icon {...props}><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><path d="M14 14h3v3h-3z" /><path d="M21 14v7h-4" /></Icon>;
 const Signal = (props) => <Icon {...props}><path d="M4 17 12 3l8 14" /><path d="M7 17h10" /><path d="M9 21h6" /></Icon>;
@@ -39,9 +40,9 @@ const navItems = [
   { id: 'entrada', label: 'Registrar Entrada', icon: DoorOpen, roles: ['admin', 'registrar', 'operator'] },
   { id: 'salas', label: 'Servicios', icon: Gauge, roles: ['admin'] },
   { id: 'usuarios', label: 'Usuarios', icon: UserRound, roles: ['admin'] },
-  { id: 'qr', label: 'QR generados', icon: QrCode, roles: ['admin', 'registrar', 'operator'] },
-  { id: 'historial', label: 'Historial', icon: History, roles: ['admin', 'registrar', 'operator'] },
-  { id: 'reportes', label: 'Reportes', icon: BarChart3, roles: ['admin'] }
+  { id: 'qr', label: 'QR generados', icon: QrCode, roles: ['admin'] },
+  { id: 'historial', label: 'Historial', icon: History, roles: ['admin'] },
+  { id: 'reportes', label: 'Reportes', icon: BarChart3, roles: ['admin', 'registrar', 'operator'] }
 ];
 
 const roleOptions = [
@@ -325,9 +326,9 @@ function Sidebar({ active, onChange, open, onClose, items }) {
           })}
         </nav>
         <div className="sidebar-card">
-          <p>Integracion</p>
-          <strong>Operacion activa</strong>
-          <span>Accesos, validaciones, historial y reportes actualizados.</span>
+          <p>Operacion</p>
+          <strong>Sesion activa</strong>
+          <span>Panel de control y registro listo para el turno actual.</span>
         </div>
       </aside>
       <button className={`scrim ${open ? 'is-visible' : ''}`} onClick={onClose} aria-label="Cerrar menu" />
@@ -347,7 +348,8 @@ function Header({
   onClearSearch,
   notifications,
   notificationsOpen,
-  onToggleNotifications
+  onToggleNotifications,
+  onLogout
 }) {
   return (
     <header className="topbar glass">
@@ -366,6 +368,10 @@ function Header({
           {searchQuery && <button className="ghost-btn search-action" type="button" onClick={onClearSearch}>Limpiar</button>}
         </form>
         <span className="session-label">{user?.first_name || 'Usuario'} · {roleLabel(user?.role, user?.role_name)}</span>
+        <button className="ghost-btn logout-btn" type="button" onClick={onLogout}>
+          <LogOut size={17} />
+          Cerrar sesion
+        </button>
         <div className="notification-wrap">
           <button className="icon-btn" type="button" onClick={onToggleNotifications} aria-label="Notificaciones"><Bell size={19} /></button>
           {notificationsOpen && (
@@ -1216,6 +1222,20 @@ function App() {
     setSearchQuery('');
   }
 
+  function logout() {
+    setUser(null);
+    setActive('dashboard');
+    setMenuOpen(false);
+    setSearchDraft('');
+    setSearchQuery('');
+    setNotificationsOpen(false);
+    setDashboard(emptyDashboard);
+    setHistory([]);
+    setReports({});
+    setAccessReport(emptyAccessReport);
+    setError('');
+  }
+
   const notifications = useMemo(() => {
     const items = [];
     if (dashboard.rooms.length === 0) {
@@ -1296,6 +1316,7 @@ function App() {
           notifications={notifications}
           notificationsOpen={notificationsOpen}
           onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+          onLogout={logout}
         />
         {error && <p className="form-message error">{error}</p>}
         {content}

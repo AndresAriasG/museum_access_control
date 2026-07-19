@@ -58,7 +58,7 @@ museum2026
 
 Los visitantes guardan tipo de documento, documento, telefono, pais y ciudad en `museum_visitors`.
 Los servicios se administran desde el modulo `Servicios` y se guardan en `museum_rooms`.
-Los usuarios se separan por perfiles en `museum_role_profiles`: `admin` tiene todos los modulos y `registrar` carga/registra visitantes.
+Los usuarios se separan por perfiles en `museum_role_profiles`: `admin` tiene todos los modulos y `registrar` ve Dashboard, Registrar Entrada y Reportes.
 La busqueda global se aplica con boton `Buscar` y filtra visitantes, servicios, QR, ciudad, pais, tipo, fecha y estado.
 La campana muestra alertas operativas como servicios pendientes o visitantes dentro.
 El modulo `Historial` tiene una busqueda propia visible y permite exportar los ingresos filtrados a CSV.

@@ -42,8 +42,8 @@ CREATE TABLE IF NOT EXISTS museum_role_profiles (
 INSERT INTO museum_role_profiles (code, name, description, allowed_modules)
 VALUES
   ('admin', 'Administrador', 'Acceso completo a administracion, reportes, servicios, usuarios y registros.', '["dashboard","entrada","salas","usuarios","qr","historial","reportes"]'::jsonb),
-  ('registrar', 'Registro', 'Carga visitantes, registra entradas, imprime QR y consulta historial operativo.', '["dashboard","entrada","qr","historial"]'::jsonb),
-  ('operator', 'Registro', 'Perfil legado compatible con usuarios operativos existentes.', '["dashboard","entrada","qr","historial"]'::jsonb)
+  ('registrar', 'Registro', 'Registra visitantes y consulta indicadores operativos.', '["dashboard","entrada","reportes"]'::jsonb),
+  ('operator', 'Registro', 'Perfil legado compatible con usuarios operativos existentes.', '["dashboard","entrada","reportes"]'::jsonb)
 ON CONFLICT (code) DO UPDATE
 SET name = EXCLUDED.name,
     description = EXCLUDED.description,
@@ -87,6 +87,16 @@ END $$;
 
 ALTER TABLE museum_auth_users
   VALIDATE CONSTRAINT museum_auth_users_role_fkey;
+```
+
+Para limitar el perfil de registro a Dashboard, Registrar Entrada y Reportes:
+
+```sql
+UPDATE museum_role_profiles
+SET description = 'Registra visitantes y consulta indicadores operativos.',
+    allowed_modules = '["dashboard","entrada","reportes"]'::jsonb,
+    updated_at = now()
+WHERE code IN ('registrar', 'operator');
 ```
 
 Si tu base ya existia antes de capturar pais y ciudad, ejecuta:
