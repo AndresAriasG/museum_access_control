@@ -69,7 +69,7 @@ El modulo `Historial` tiene una busqueda propia visible y permite exportar los i
 El modulo `Reportes` permite filtrar accesos por rango de fechas, ver rankings y exportar CSV.
 El dashboard muestra primero ingresos por dia y debajo el detalle por hora con etiquetas visibles.
 El registro valida que el nombre tenga solo letras y que el email tenga formato de correo.
-Cada registro de entrada genera un QR por persona, relacionado con `ticketId`, `ticketCode` y `entryId`, valido por 3 horas; el modulo `Validar QR` permite verificar vigencia y el modulo `QR generados` permite consultar o imprimir los ultimos codigos emitidos.
+Cada registro de entrada genera un QR por persona, relacionado con `ticketId`, `ticketCode` y `entryId`, valido por 3 horas; los QR nuevos apuntan a `/?qr=CODIGO` para que la camara nativa del celular abra la validacion, y el modulo `QR generados` permite consultar o imprimir los ultimos codigos emitidos.
 
 ## Railway
 

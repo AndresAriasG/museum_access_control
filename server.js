@@ -692,6 +692,15 @@ app.post("/api/qr/validate", requireDb, async (req, res) => {
   const { ticketCode: code } = req.body;
   let cleanCode = String(code || "").trim();
 
+  if (/^https?:\/\//i.test(cleanCode)) {
+    try {
+      const parsedUrl = new URL(cleanCode);
+      cleanCode = String(parsedUrl.searchParams.get("qr") || cleanCode).trim();
+    } catch (_error) {
+      return res.status(400).json({ error: "El enlace del QR no tiene un formato valido" });
+    }
+  }
+
   if (cleanCode.startsWith("{")) {
     try {
       const payload = JSON.parse(cleanCode);

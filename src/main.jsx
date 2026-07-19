@@ -148,9 +148,14 @@ function exportCsv(rows) {
 }
 
 function qrPayload(ticket) {
+  const ticketCode = ticket.code || ticket.ticket_code;
+  if (typeof window !== 'undefined' && window.location?.origin && ticketCode) {
+    return `${window.location.origin}/?qr=${encodeURIComponent(ticketCode)}`;
+  }
+
   return JSON.stringify({
     ticketId: ticket.ticketId || ticket.ticket_id || ticket.id,
-    ticketCode: ticket.code || ticket.ticket_code,
+    ticketCode,
     entryId: ticket.entryId || ticket.entry_id,
     visitor: ticket.visitor || ticket.full_name,
     documentType: ticket.documentType || ticket.document_type,
@@ -822,6 +827,12 @@ function QrModule({ history }) {
 function extractTicketCode(value) {
   const clean = String(value || '').trim();
   if (!clean) return '';
+  try {
+    const url = new URL(clean);
+    return url.searchParams.get('qr') || clean;
+  } catch (_error) {
+    // Continue with plain code or JSON payload.
+  }
   if (!clean.startsWith('{')) return clean;
   try {
     const payload = JSON.parse(clean);
@@ -831,7 +842,7 @@ function extractTicketCode(value) {
   }
 }
 
-function QrValidationModule({ user }) {
+function QrValidationModule({ user, initialCode, onInitialCodeUsed }) {
   const [code, setCode] = useState('');
   const [result, setResult] = useState(null);
   const [message, setMessage] = useState('');
@@ -868,7 +879,7 @@ function QrValidationModule({ user }) {
 
   async function startScanner() {
     if (!('BarcodeDetector' in window)) {
-      setMessage('Este navegador no permite lectura directa de QR. Puedes pegar el codigo manualmente.');
+      setMessage('Este navegador no permite lectura directa desde la app. Usa la camara del celular sobre el QR impreso o pega el codigo manualmente.');
       return;
     }
 
@@ -905,6 +916,13 @@ function QrValidationModule({ user }) {
   }
 
   useEffect(() => () => stopScanner(), []);
+
+  useEffect(() => {
+    if (!initialCode) return;
+    setCode(initialCode);
+    validate(initialCode);
+    onInitialCodeUsed?.();
+  }, [initialCode]);
 
   const ticket = result?.ticket;
 
@@ -1422,9 +1440,15 @@ const emptyAccessReport = {
   rankings: { countries: [], cities: [], rooms: [] }
 };
 
+function qrCodeFromUrl() {
+  if (typeof window === 'undefined') return '';
+  return new URLSearchParams(window.location.search).get('qr') || '';
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [active, setActive] = useState('dashboard');
+  const [pendingQrCode, setPendingQrCode] = useState(qrCodeFromUrl);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dashboard, setDashboard] = useState(emptyDashboard);
   const [history, setHistory] = useState([]);
@@ -1464,6 +1488,14 @@ function App() {
   }, [user]);
 
   useEffect(() => {
+    if (!user || !pendingQrCode) return;
+    const qrItem = navItems.find((item) => item.id === 'validar_qr');
+    if (qrItem && canAccess(qrItem, user)) {
+      setActive('validar_qr');
+    }
+  }, [user, pendingQrCode]);
+
+  useEffect(() => {
     if (!user) return undefined;
     const timer = window.setTimeout(() => {
       loadData();
@@ -1486,6 +1518,14 @@ function App() {
     setSearchQuery('');
   }
 
+  function consumePendingQrCode() {
+    setPendingQrCode('');
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('qr');
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+  }
+
   async function logout() {
     const currentUser = user;
     if (currentUser) {
@@ -1506,6 +1546,7 @@ function App() {
     setReports({});
     setAccessReport(emptyAccessReport);
     setError('');
+    setPendingQrCode('');
   }
 
   const notifications = useMemo(() => {
@@ -1541,7 +1582,9 @@ function App() {
     if (active === 'entrada') return <EntryModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
     if (active === 'salas') return <RoomsModule rooms={dashboard.rooms} user={user} onSaved={loadData} />;
     if (active === 'usuarios') return <UsersModule user={user} />;
-    if (active === 'validar_qr') return <QrValidationModule user={user} />;
+    if (active === 'validar_qr') {
+      return <QrValidationModule user={user} initialCode={pendingQrCode} onInitialCodeUsed={consumePendingQrCode} />;
+    }
     if (active === 'qr') return <QrModule history={history} />;
     if (active === 'historial') {
       return (
